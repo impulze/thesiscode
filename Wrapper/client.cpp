@@ -5,7 +5,11 @@
 #include <cstdio>
 #include <cstring>
 
+#ifndef WIN32
 #include <unistd.h>
+#else
+#include "windows.h"
+#endif
 
 static bool g_run_server = true;
 
@@ -39,9 +43,16 @@ int main(int argc, char **argv)
 	contents[11] = 'n';
 	messages.push_back(create_message(wrap::message_type::CHECK, contents));
 
-	client.send_messages(messages);
+	for (auto const &message : messages) {
+		client.send_message(message, 1000);
+	}
 
+#ifndef WIN32
 	sleep(10);
+#else
+	Sleep(10);
+#endif
+
 #if 0
 	std::signal(SIGINT, sigint_handler);
 

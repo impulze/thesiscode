@@ -38,7 +38,7 @@ struct client
 	virtual ~client();
 
 	// can throw timeout_exception
-	message send_message(message const &message);
+	message send_message(message const &message, int timeout_ms);
 
 private:
 	client_impl *impl_;

@@ -18,7 +18,7 @@ message create_message(message_type type, std::vector<std::uint8_t> const &conte
 	message new_message;
 	new_message.version = 1;
 	new_message.type = type;
-	new_message.size = contents.size();
+	new_message.size = static_cast<std::uint8_t>(contents.size());
 	new_message.contents = contents;
 
 	return new_message;
