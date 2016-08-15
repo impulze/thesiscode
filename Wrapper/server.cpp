@@ -1,21 +1,30 @@
+#include "wrap_cnc.h"
 #include "wrap_communication.h"
 #include "wrap_protocol.h"
 
 #include <csignal>
 #include <cstdio>
 
-#ifdef WIN32
 #include "winsock2.h"
-#endif
+
+#define MMIDBG(...) \
+do {\
+	SYSTEMTIME lt; \
+	GetLocalTime(&lt); \
+	std::printf("%04d/%02d/%02d %02d:%02d:%02d.%03d ", lt.wYear, lt.wMonth, lt.wDay, lt.wHour, lt.wMinute, lt.wSecond, lt.wMilliseconds); \
+	std::printf(__VA_ARGS__); \
+	std::printf("\n"); \
+	std::fflush(stdout); \
+} while(0);
 
 static bool g_run_server = true;
 
+static void load_cnc_dlls();
 static void sigint_handler(int signal_number);
 static void handle_message(wrap::message const &message);
 
 int main(int argc, char **argv)
 {
-#ifdef WIN32
 	WORD wVersionRequested;
 	WSADATA wsaData;
 	int err;
@@ -30,7 +39,6 @@ int main(int argc, char **argv)
 		fprintf(stderr, "WSAStartup failed with error: %d\n", err);
 		return 1;
 	}
-#endif
 
 	try {
 		wrap::server server("127.0.0.1", 55544);
@@ -50,10 +58,18 @@ int main(int argc, char **argv)
 		std::printf("Exception while running server.\n%s\n", exception.what());
 	}
 
-#ifdef WIN32
 	WSACleanup();
-#endif
 }
+
+
+static void load_cnc_dlls()
+{
+	const HMODULE module = LoadLibrary(L"mmictrl.dll");
+
+	if (module == NULL) {
+		throw std::runtime_error("Unable to load mmictrl.dll");
+	}
+
 
 static void sigint_handler(int signal_number)
 {
