@@ -4,6 +4,7 @@
 #include "wrap_mmictrl.h"
 
 #include <cassert>
+#include <chrono>
 #include <cerrno>
 #include <codecvt>
 #include <cstdio>
@@ -76,6 +77,7 @@ static std::string address_to_string(const sockaddr_storage *address, int family
 
 struct client_data
 {
+	std::unique_ptr<wrap::message> recv_message();
 	void send_message(wrap::message const &message);
 
 	socket_type socket;
@@ -331,6 +333,51 @@ std::string address_to_string(const sockaddr_storage *address, int family)
 	throw socket_error("inet_ntop");
 }
 
+std::unique_ptr<wrap::message> client_data::recv_message()
+{
+	const size_t prev_size = buffer.size();
+
+	buffer.resize(prev_size + READ_BUFFER);
+
+	std::uint8_t *data = buffer.data();
+
+#ifndef WIN32
+	ssize_t result;
+
+	result = recv(socket, data + prev_size, READ_BUFFER, 0);
+#else
+	int result;
+
+	result = recv(socket, reinterpret_cast<char *>(data + prev_size), READ_BUFFER, 0);
+#endif
+
+	if (result <= 0) {
+		char exception_string[1024];
+
+		if (result == 0) {
+			std::snprintf(exception_string, sizeof exception_string, "EOF while reading message from <%s>\n", address_string.c_str());
+		} else {
+			const std::string error_string = error_string_from_function_call("read", true);
+
+			std::snprintf(exception_string, sizeof exception_string, "While reading from <%s>:\n%s\n", address_string.c_str(), error_string.c_str());
+		}
+
+		throw std::runtime_error(exception_string);
+	}
+
+	std::unique_ptr<wrap::message> message = wrap::message::from_bytes(buffer);
+
+	if (!message) {
+		if (buffer.size() >= READ_BUFFER_MAX) {
+			char exception_string[1024];
+			std::snprintf(exception_string, sizeof exception_string, "No messages received yet from client <%s> after <%d> bytes.\nForcing disconnect.\n", address_string.c_str(), READ_BUFFER_MAX);
+			throw std::runtime_error(exception_string);
+		}
+	}
+
+	return message;
+}
+
 void client_data::send_message(wrap::message const &message)
 {
 	std::vector<std::uint8_t> bytes;
@@ -440,45 +487,17 @@ void server_impl::remove_client(client_data &client_data)
 
 void server_impl::handle_client(client_data &client_data)
 {
-	const size_t prev_size = client_data.buffer.size();
+	std::unique_ptr<wrap::message> message;
 
-	client_data.buffer.resize(prev_size + READ_BUFFER);
-
-	std::uint8_t *data = client_data.buffer.data();
-
-#ifndef WIN32
-	ssize_t result;
-
-	result = recv(client_data.socket, data + prev_size, READ_BUFFER, 0);
-#else
-	int result;
-
-	result = recv(client_data.socket, reinterpret_cast<char *>(data + prev_size), READ_BUFFER, 0);
-#endif
-
-	if (result <= 0) {
-		if (result == 0) {
-			std::printf("EOF while reading from client <%s>\n", client_data.address_string.c_str());
-		} else {
-			const std::string error_string = error_string_from_function_call("read", true);
-
-			std::fprintf(stderr, "While reading from client <%s>:\n%s\n", client_data.address_string.c_str(), error_string.c_str());
-		}
-
+	try {
+		message = client_data.recv_message();
+	} catch (std::exception const &exception) {
 		close_socket(client_data.socket);
 		remove_client(client_data);
-		return;
+		throw exception;
 	}
 
-	std::unique_ptr<message> message = message::from_bytes(client_data.buffer);
-
 	if (!message) {
-		if (client_data.buffer.size() >= READ_BUFFER_MAX) {
-			std::fprintf(stderr, "No messages received yet from client <%s> after <%d> bytes.\nForcing disconnect.\n", client_data.address_string.c_str(), READ_BUFFER_MAX);
-			close_socket(client_data.socket);
-			remove_client(client_data);
-		}
-
 		return;
 	}
 
@@ -759,40 +778,50 @@ client::~client()
 
 message client::send_message(message const &message, int timeout_ms)
 {
-	try {
-		impl_->data.send_message(message);
-	} catch (std::exception const &exception) {
-		static_cast<void>(exception);
-		throw;
-	}
+	impl_->data.send_message(message);
 
+	const std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
+	std::unique_ptr<wrap::message> response;
+
+	while (true) {
 #ifndef WIN32
-	const int result = poll(&(impl_->data.pollfd), 1, timeout_ms);
+		const int result = poll(&(impl_->data.pollfd), 1, timeout_ms);
 #else
-	const int result = WSAPoll(&(impl_->data.pollfd), 1, timeout_ms);
+		const int result = WSAPoll(&(impl_->data.pollfd), 1, timeout_ms);
 #endif
 
 #ifndef WIN32
-	if (result < 0) {
+		if (result < 0) {
 #else
-	if (result == SOCKET_ERROR) {
+		if (result == SOCKET_ERROR) {
 #endif
-		throw socket_error("poll");
-	}
+			throw socket_error("poll");
+		}
 
-	if (result == 0) {
-		throw timeout_exception("Error fetching message response.");
-	}
+		if (result == 0) {
+			throw timeout_exception("No server data for message response.");
+		}
 
-	if (impl_->data.pollfd.revents & POLLIN) {
-		//...
-	} else if (impl_->data.pollfd.revents & (POLLHUP|POLLERR|POLLNVAL)) {
-		throw std::runtime_error("Unexpected polling state for client descriptor.");
-	} else {
-		assert(false);
-	}
+		if (impl_->data.pollfd.revents & POLLIN) {
+			response = impl_->data.recv_message();
 
-	return wrap::message(message_type::CTRL_OPEN_RESPONSE);
+			if (!response) {
+				const std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+				const std::chrono::milliseconds elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
+				timeout_ms -= elapsed.count();
+
+				if (timeout_ms <= 0) {
+					throw timeout_exception("No response from server after timeout.");
+				}
+			} else {
+				return *response;
+			}
+		} else if (impl_->data.pollfd.revents & (POLLHUP|POLLERR|POLLNVAL)) {
+			throw std::runtime_error("Unexpected polling state for client descriptor.");
+		} else {
+			assert(false);
+		}
+	}
 }
 
 timeout_exception::timeout_exception(std::string const &error_msg)

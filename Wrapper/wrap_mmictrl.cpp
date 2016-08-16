@@ -66,6 +66,9 @@ static LONG block_type_conversion(wrap::transfer_block_type type);
 static wrap::callback_type_type conversion_callback_type_type(LONG type);
 #endif
 
+static void check_server_error(wrap::client &client, wrap::message const &response);
+static void check_correct_response_type(wrap::client &client, wrap::message const &response, wrap::message_type type);
+
 namespace wrap
 {
 
@@ -282,7 +285,25 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 	try {
 		wrap::message message(wrap::message_type::CTRL_OPEN);
 		message.append(name);
-		impl_->client->send_message(message, 1000);
+		wrap::message response = impl_->client->send_message(message, 2000);
+
+		check_server_error(*(impl_->client), response);
+		check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_OPEN_RESPONSE);
+
+		if (response.contents[0] == 0) {
+			std::uint16_t nid;
+			std::memcpy(&nid, response.contents.data() + 1, 2);
+			impl_->id = ntohs(nid);
+			std::printf("[STATUS] CNC Connection to <%s> successful (ID: <%hu>).\n", name.c_str(), impl_->id);
+		} else {
+			std::uint16_t nlength;
+			std::memcpy(&nlength, response.contents.data() + 1, 2);
+			const std::uint16_t length = ntohs(nlength);
+			const std::string error_string(response.contents.data() + 1 + 2, response.contents.data() + 1 + 2 + length);
+			char exception_string[1024];
+			std::snprintf(exception_string, sizeof exception_string, "[ERROR] CNC Connection to <%s> failed.\n[ERROR] %s\n", name.c_str(), error_string.c_str());
+			throw std::runtime_error(exception_string);
+		}
 	} catch (...) {
 		delete impl_;
 		throw;
@@ -511,3 +532,25 @@ wrap::callback_type_type conversion_callback_type_type(LONG type)
 }
 
 #endif
+
+void check_server_error(wrap::client &client, wrap::message const &response)
+{
+	if (response.type == wrap::message_type::SERVER_ERROR) {
+		std::uint16_t nlength;
+		std::memcpy(&nlength, response.contents.data(), 2);
+		const std::uint16_t length = ntohs(nlength);
+		const std::string error_string(response.contents.data() + 2, response.contents.data() + 2 + length);
+		char exception_string[1024];
+		std::snprintf(exception_string, sizeof exception_string, "A server error occured.\n%s", error_string.c_str());
+		throw std::runtime_error(exception_string);
+	}
+}
+
+void check_correct_response_type(wrap::client &client, wrap::message const &response, wrap::message_type type)
+{
+	if (response.type != type) {
+		char exception_string[1024];
+		std::snprintf(exception_string, sizeof exception_string, "Unexpected response type.\n");
+		throw std::runtime_error(exception_string);
+	}
+}
