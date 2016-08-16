@@ -377,6 +377,7 @@ void server_impl::handle_client(client_data &client_data)
 			fprintf(stderr, "While reading from client <%s>:\n%s\n", client_data.address_string.c_str(), error_string.c_str());
 		}
 
+		close_socket(client_data.socket);
 		remove_client(client_data);
 		return;
 	}
@@ -488,14 +489,10 @@ void server::run_one(int timeout_ms)
 		throw timeout_exception("Timeout while waiting for incoming messages.");
 	}
 
-	size_t count = 0;
-
-	for (server_impl::pollfds_size_type i = 0; i < impl_->pollfds.size() && count < static_cast<server_impl::pollfds_size_type>(result); i++) {
+	for (server_impl::pollfds_size_type i = 0; i < impl_->pollfds.size() && static_cast<server_impl::pollfds_size_type>(result); i++) {
 		const short revents = impl_->pollfds[i].revents;
 
 		if (revents & POLLIN) {
-			count++;
-
 			if (i == 0) {
 				impl_->new_client();
 			} else {
@@ -505,10 +502,19 @@ void server::run_one(int timeout_ms)
 			if (i == 0) {
 				throw std::runtime_error("Unexpected polling state for server descriptor.");
 			} else {
-				throw std::runtime_error("Unexpected polling state for client descriptor.");
+				client_data &client_data = impl_->lookup_client_by_socket(impl_->pollfds[i].fd);
+
+				if (revents & POLLHUP) {
+					std::printf("Client <%s> hang up, reading rest of channel.\n", client_data.address_string.c_str());
+					impl_->handle_client(client_data);
+				} else if (revents & POLLERR) {
+					std::printf("Error condition at client <%s>.\n", client_data.address_string.c_str());
+					close_socket(client_data.socket);
+					impl_->remove_client(client_data);
+				} else {
+					throw std::runtime_error("Unexpected polling state for client descriptor..");
+				}
 			}
-		} else {
-			assert(false);
 		}
 	}
 }
