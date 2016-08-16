@@ -13,6 +13,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "misc.h"
+
 #ifdef WIN32
 #include <windows.h>
 
@@ -59,7 +61,6 @@ static bool g_dll_loaded;
 static std::map<LPVOID, wrap::control *> g_control_mapping;
 static void WINAPI callback(ULONG type, ULONG param, LPVOID context);
 static void load_cnc_dlls();
-static std::string error_string_from_win32_error(DWORD win32_error);
 static void throw_transfer_exception(LONG result);
 static LONG block_type_conversion(wrap::transfer_block_type type);
 static wrap::callback_type_type conversion_callback_type_type(LONG type);
@@ -409,35 +410,6 @@ void load_cnc_dlls()
 	LOAD_FUN(ncrSendFileBlocked, module)
 	LOAD_FUN(ncrSendMessage, module)
 	LOAD_FUN(ncrReadParamArray, module)
-}
-
-std::string error_string_from_win32_error(DWORD win32_error)
-{
-	if (win32_error & (1 << 29)) {
-		const std::uint8_t subsystem = static_cast<std::uint8_t>((win32_error >> 16) & 0xFF);
-		const std::uint16_t error_number = static_cast<std::uint16_t>(win32_error & 0x7FFF);
-
-		std::ostringstream strm;
-
-		strm << "Error in Subsystem " << std::to_string(subsystem) << ". ";
-		strm << "Error code " << std::to_string(error_number) << ".";
-
-		return strm.str();
-	}
-
-	LPWSTR buffer = nullptr;
-	size_t size = FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-		NULL, win32_error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPWSTR>(&buffer), 0, NULL);
-
-	const std::wstring message(buffer, size);
-
-	//Free the buffer.
-	LocalFree(buffer);
-
-	using convert_type = std::codecvt_utf8<wchar_t>;
-	std::wstring_convert<convert_type, wchar_t> converter;
-
-	return converter.to_bytes(message);
 }
 
 void throw_transfer_exception(LONG result)

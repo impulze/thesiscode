@@ -1,3 +1,4 @@
+#include "misc.h"
 #include "wrap_communication.h"
 #include "wrap_protocol.h"
 #include "wrap_mmictrl.h"
@@ -46,7 +47,17 @@ struct getaddrinfo_error
 struct errno_error
 	: std::runtime_error
 {
-	errno_error(std::string const &function);
+	errno_error(std::string const &error_string);
+
+	static errno_error create(std::string const &function);
+};
+
+struct socket_error
+	: errno_error
+{
+	socket_error(std::string const &error_string);
+
+	static socket_error create(std::string const &function);
 };
 
 struct lookup_entry
@@ -60,7 +71,7 @@ struct lookup_entry
 
 static std::vector<lookup_entry> lookup(std::string const &address, std::uint16_t port);
 static std::string error_string_from_getaddrinfo_error(int error);
-static std::string error_string_from_function_call(std::string const &function);
+static std::string error_string_from_function_call(std::string const &function, bool socket_related);
 static std::string address_to_string(const sockaddr_storage *address, int family);
 
 struct client_data
@@ -131,9 +142,24 @@ getaddrinfo_error::getaddrinfo_error(int error)
 {
 }
 
-errno_error::errno_error(std::string const &function)
-	: std::runtime_error(error_string_from_function_call(function))
+errno_error::errno_error(std::string const &error_string)
+	: std::runtime_error(error_string)
 {
+}
+
+errno_error errno_error::create(std::string const &function)
+{
+	return errno_error(error_string_from_function_call(function, false));
+}
+
+socket_error::socket_error(std::string const &error_string)
+	: errno_error(error_string)
+{
+}
+
+socket_error socket_error::create(std::string const &function)
+{
+	return socket_error(error_string_from_function_call(function, true));
 }
 
 std::vector<lookup_entry> lookup(std::string const &address, std::uint16_t port)
@@ -222,7 +248,7 @@ std::string error_string_from_getaddrinfo_error(int error)
 	return converter.to_bytes(strm.str());
 }
 
-std::string error_string_from_function_call(std::string const &function)
+std::string error_string_from_function_call(std::string const &function, bool socket_related)
 {
 	char error_string[1024];
 
@@ -244,7 +270,14 @@ std::string error_string_from_function_call(std::string const &function)
 #ifndef WIN32
 	const char *buffer = strerror_r(errno, error_string, sizeof error_string);
 #else
-	static_cast<void>(strerror_s(error_string, sizeof error_string, errno));
+	if (socket_related) {
+		const int error = WSAGetLastError();
+		const std::string error_string_gen = error_string_from_win32_error(error);
+		snprintf(error_string, sizeof error_string, error_string_gen.c_str());
+	} else {
+		static_cast<void>(strerror_s(error_string, sizeof error_string, errno));
+	}
+
 	const char *buffer = error_string;
 #endif
 #endif
@@ -295,7 +328,7 @@ std::string address_to_string(const sockaddr_storage *address, int family)
 	}
 
 
-	throw errno_error("inet_ntop");
+	throw socket_error("inet_ntop");
 }
 
 void client_data::send_message(wrap::message const &message)
@@ -304,7 +337,6 @@ void client_data::send_message(wrap::message const &message)
 
 	message.to_bytes(bytes);
 
-	printf("%d\n", socket);
 #ifndef WIN32
 	ssize_t result = send(socket, bytes.data(), bytes.size(), 0);
 #else
@@ -313,10 +345,10 @@ void client_data::send_message(wrap::message const &message)
 
 	if (result != bytes.size()) {
 		int old_errno = errno;
-		fprintf(stderr, "Not all of the bytes sent to server.\n");
+		std::fprintf(stderr, "Not all of the bytes sent to server.\n");
 		close_socket(socket);
 		errno = old_errno;
-		throw errno_error("send");
+		throw socket_error("send");
 	}
 }
 
@@ -351,9 +383,13 @@ void server_impl::new_client()
 
 	client_data.socket = accept(socket, reinterpret_cast<sockaddr *>(&storage), &storage_size);
 
-	if (client_data.socket == -1) {
-		const std::string error_string = error_string_from_function_call("accept");
-		fprintf(stderr, "%s\n", error_string.c_str());
+#ifndef WIN32
+	if (client_data.socket < 0) {
+#else
+	if (client_data.socket == INVALID_SOCKET) {
+#endif
+		const std::string error_string = error_string_from_function_call("accept", true);
+		std::fprintf(stderr, "Error creating client socket.\n%s\n", error_string.c_str());
 		return;
 	}
 
@@ -363,12 +399,12 @@ void server_impl::new_client()
 	catch (std::exception const &exception) {
 		static_cast<void>(exception);
 		close_socket(socket);
-		fprintf(stderr, "Error converting client address to string.\n");
+		std::fprintf(stderr, "Error converting client address to string.\n");
 		close_socket(client_data.socket);
 		return;
 	}
 
-	printf("New client connection from: <%s>\n", client_data.address_string.c_str());
+	std::printf("New client connection from: <%s>\n", client_data.address_string.c_str());
 	clients.push_back(client_data);
 
 #ifndef WIN32
@@ -422,11 +458,11 @@ void server_impl::handle_client(client_data &client_data)
 
 	if (result <= 0) {
 		if (result == 0) {
-			printf("EOF while reading from client <%s>\n", client_data.address_string.c_str());
+			std::printf("EOF while reading from client <%s>\n", client_data.address_string.c_str());
 		} else {
-			const std::string error_string = error_string_from_function_call("read");
+			const std::string error_string = error_string_from_function_call("read", true);
 
-			fprintf(stderr, "While reading from client <%s>:\n%s\n", client_data.address_string.c_str(), error_string.c_str());
+			std::fprintf(stderr, "While reading from client <%s>:\n%s\n", client_data.address_string.c_str(), error_string.c_str());
 		}
 
 		close_socket(client_data.socket);
@@ -438,7 +474,7 @@ void server_impl::handle_client(client_data &client_data)
 
 	if (!message) {
 		if (client_data.buffer.size() >= READ_BUFFER_MAX) {
-			fprintf(stderr, "No messages received yet from client <%s> after <%d> bytes.\nForcing disconnect.\n", client_data.address_string.c_str(), READ_BUFFER_MAX);
+			std::fprintf(stderr, "No messages received yet from client <%s> after <%d> bytes.\nForcing disconnect.\n", client_data.address_string.c_str(), READ_BUFFER_MAX);
 			close_socket(client_data.socket);
 			remove_client(client_data);
 		}
@@ -534,9 +570,13 @@ server::server(std::string const &address, std::uint16_t port)
 
 	impl_->socket = socket(used_entry.family, used_entry.socket_type, used_entry.protocol);
 
+#ifndef WIN32
 	if (impl_->socket < 0) {
+#else
+	if (impl_->socket == INVALID_SOCKET) {
+#endif
 		delete impl_;
-		throw errno_error("socket");
+		throw socket_error("socket");
 	}
 
 	int result = bind(impl_->socket, reinterpret_cast<const sockaddr *>(&used_entry.address), used_entry.address_length);
@@ -544,7 +584,7 @@ server::server(std::string const &address, std::uint16_t port)
 	if (result != 0) {
 		close_socket(impl_->socket);
 		delete impl_;
-		throw errno_error("bind");
+		throw socket_error("bind");
 	}
 
 	result = listen(impl_->socket, 5);
@@ -552,7 +592,7 @@ server::server(std::string const &address, std::uint16_t port)
 	if (result != 0) {
 		close_socket(impl_->socket);
 		delete impl_;
-		throw errno_error("listen");
+		throw socket_error("listen");
 	}
 
 	std::string address_string;
@@ -593,8 +633,12 @@ void server::run_one(int timeout_ms)
 	const int result = WSAPoll(impl_->pollfds.data(), impl_->pollfds.size(), timeout_ms);
 #endif
 
+#ifndef WIN32
 	if (result < 0) {
-		throw errno_error("poll");
+#else
+	if (result == SOCKET_ERROR) {
+#endif
+		throw socket_error("poll");
 	}
 
 	if (result == 0) {
@@ -672,9 +716,13 @@ client::client(std::string const &address, std::uint16_t port)
 
 	impl_->data.socket = socket(used_entry.family, used_entry.socket_type, used_entry.protocol);
 
+#ifndef WIN32
 	if (impl_->data.socket < 0) {
+#else
+	if (impl_->data.socket == INVALID_SOCKET) {
+#endif
 		delete impl_;
-		throw errno_error("socket");
+		throw socket_error("socket");
 	}
 
 	std::string address_string;
@@ -695,7 +743,7 @@ client::client(std::string const &address, std::uint16_t port)
 	if (result != 0) {
 		close_socket(impl_->data.socket);
 		delete impl_;
-		throw errno_error("connect");
+		throw socket_error("connect");
 	}
 
 	impl_->data.pollfd.fd = impl_->data.socket;
@@ -724,8 +772,12 @@ message client::send_message(message const &message, int timeout_ms)
 	const int result = WSAPoll(&(impl_->data.pollfd), 1, timeout_ms);
 #endif
 
+#ifndef WIN32
 	if (result < 0) {
-		throw errno_error("poll");
+#else
+	if (result == SOCKET_ERROR) {
+#endif
+		throw socket_error("poll");
 	}
 
 	if (result == 0) {
