@@ -5,6 +5,7 @@
 #include <cmath>
 #include <csignal>
 #include <cstdio>
+#include <cstring>
 
 // TODO
 #include "winsock2.h"
@@ -46,7 +47,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-#if 1
+#if 0
 	try {
 		my_local_control ctrl("CNC1");
 		std::map<std::uint16_t, double> params;
@@ -87,9 +88,9 @@ int main(int argc, char **argv)
 	}
 #endif
 
-#if 0
+#if 1
 	try {
-		wrap::server server("127.0.0.1", 55544);
+		wrap::server server("10.0.0.138", 44455);
 
 		std::signal(SIGINT, sigint_handler);
 
@@ -122,7 +123,13 @@ void sigint_handler(int signal_number)
 void handle_message(wrap::message const &message)
 {
 	printf("received message %hu\n", message.type);
-	printf("string: %s\n", message.contents.data());
+	if (message.type == wrap::message_type::CTRL_OPEN) {
+		std::uint16_t size;
+		std::memcpy(&size, message.contents.data(), 2);
+		size = ntohs(size);
+		std::string name(message.contents.data() + 2, message.contents.data() + 2 + size);
+		std::printf("open name: '%s'\n", name.c_str());
+	}
 }
 
 template <class... T>
@@ -131,7 +138,7 @@ my_local_control::my_local_control(T &&... args)
 {
 }
 
-void my_local_control::handle_message(wrap::callback_type_type type, unsigned long param)
+void my_local_control::handle_message(wrap::callback_type_type type, unsigned long parameter)
 {
 	std::string type_string;
 
@@ -170,5 +177,5 @@ void my_local_control::handle_message(wrap::callback_type_type type, unsigned lo
 			type_string = "CAN Transfer Complete"; break;
 	}
 
-	std::printf("Received CNC mssage: %s: %lu\n", type_string.c_str(), param);
+	std::printf("Received CNC mssage: %s: %lu\n", type_string.c_str(), parameter);
 };
