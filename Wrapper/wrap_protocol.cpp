@@ -1,101 +1,94 @@
 #include "wrap_protocol.h"
 
 #include <cstddef>
+#include <cstring>
 #include <stdexcept>
 
+#ifdef WIN32
+#include <winsock2.h>
+#else
+#include <arpa/inet.h>
+#endif
+
 static bool valid_message_type(std::uint16_t check_type);
-static std::uint8_t size_for_message_type(wrap::message_type type);
 
 namespace wrap
 {
 
-message create_message(message_type type, std::vector<std::uint8_t> const &contents)
+message::message(message_type type)
+	: version(1),
+	  type(type),
+	  size(6)
 {
-	if (contents.size() != size_for_message_type(type)) {
-		throw std::runtime_error("Invalid size for contents for message.");
-	}
-
-	message new_message;
-	new_message.version = 1;
-	new_message.type = type;
-	new_message.size = static_cast<std::uint8_t>(contents.size());
-	new_message.contents = contents;
-
-	return new_message;
 }
 
-std::vector<message> extract_messages_from_buffer(std::vector<std::uint8_t> bytes)
+void message::to_bytes(std::vector<std::uint8_t> &bytes) const
 {
-	std::vector<message> messages;
+	bytes.resize(6);
 
-	for (size_t i = 4; i < bytes.size(); i++) {
-		const std::uint8_t b0 = bytes[i - 4];
-		const std::uint8_t b1 = bytes[i - 3];
-		const std::uint8_t b2 = bytes[i - 2];
-		const std::uint8_t b3 = bytes[i - 1];
-		const std::uint8_t b4 = bytes[i - 0];
+	bytes[0] = static_cast<std::uint8_t>(message_special::MAGIC);
+	bytes[1] = version;
 
-		if (b0 != static_cast<std::uint8_t>(message_special::MAGIC)) {
-			continue;
-		}
+	const std::uint16_t message_type = htons(static_cast<std::uint16_t>(type));
+	const std::uint16_t message_size = htonl(size);
 
-		// message version
-		if (b1 != 1) {
-			continue;
-		}
+	std::memcpy(bytes.data() + 2, &message_type, 2);
+	std::memcpy(bytes.data() + 4, &message_size, 2);
 
-		const std::uint16_t check_type = (static_cast<const std::uint16_t>(b2) << 8) | b3;
-
-		if (!valid_message_type(check_type)) {
-			continue;
-		}
-
-		const message_type type = static_cast<message_type>(check_type);
-
-		if (size_for_message_type(type) == b4) {
-			// check remaining size
-			const size_t remaining_size = bytes.size() - (i + 1);
-
-			if (b4 > remaining_size) {
-				return messages;
-			}
-		} else {
-			continue;
-		}
-
-		const size_t contents_begin = i + 1;
-
-		message new_message;
-
-		new_message.version = b1;
-		new_message.type = type;
-		new_message.size = b4;
-		new_message.contents.assign(bytes.begin() + contents_begin, bytes.begin() + contents_begin + b4);
-
-		messages.push_back(new_message);
-
-		const size_t bytes_size = 5 + new_message.contents.size();
-
-		bytes.erase(bytes.begin() + (i - 4), bytes.begin() + (i - 4) + bytes_size);
-
-		i = 4 - 1;
-	}
-
-	return messages;
+	bytes.insert(bytes.end(), contents.begin(), contents.end());
 }
 
-std::vector<std::uint8_t> message_to_bytes(message const &message)
+std::shared_ptr<message> message::from_bytes(std::vector<std::uint8_t> const &bytes)
 {
-	std::vector<std::uint8_t> bytes;
+	std::shared_ptr<message> message;
 
-	bytes.push_back(static_cast<std::uint8_t>(message_special::MAGIC));
-	bytes.push_back(message.version);
-	bytes.push_back((static_cast<std::uint16_t>(message.type) >> 8) & 0xFF);
-	bytes.push_back(static_cast<std::uint16_t>(message.type) & 0xFF);
-	bytes.push_back(size_for_message_type(message.type));
-	bytes.insert(bytes.end(), message.contents.begin(), message.contents.end());
+	if (bytes.size() < 6) {
+		return message;
+	}
 
-	return bytes;
+	if (bytes[0] != static_cast<std::uint8_t>(message_special::MAGIC)) {
+		std::fprintf(stderr, "Invalid message format.\n");
+		return message;
+	}
+
+	if (bytes[1] != 1) {
+		std::fprintf(stderr, "Invalid message version.\n");
+		return message;
+	}
+
+	std::uint16_t check_type;
+
+	std::memcpy(&check_type, bytes.data() + 2, 2);
+
+	check_type = ntohs(check_type);
+
+	if (!valid_message_type(check_type)) {
+		std::fprintf(stderr, "Invalid message type.\n");
+		return message;
+	}
+
+	std::uint16_t check_size;
+
+	std::memcpy(&check_size, bytes.data() + 4, 2);
+
+	check_size = ntohs(check_size);
+
+	if (check_size < 6) {
+		std::fprintf(stderr, "Insufficient message size.\n");
+		return message;
+	}
+
+	if (check_size > bytes.size()) {
+		std::printf("Not enough message data yet.\n");
+		return message;
+	}
+
+	message.reset(new wrap::message(static_cast<message_type>(check_type)));
+
+	message->size += bytes.size() - 6;
+	message->contents.insert(message->contents.end(), bytes.begin() + 6, bytes.end());
+
+	return message;
 }
 
 }
@@ -110,16 +103,4 @@ bool valid_message_type(std::uint16_t check_type)
 	}
 
 	return false;
-}
-
-std::uint8_t size_for_message_type(wrap::message_type type)
-{
-	switch (type) {
-		case wrap::message_type::CTRL_OPEN:
-			return 13;
-		case wrap::message_type::CTRL_OPEN_RESPONSE:
-			return 14;
-	}
-
-	throw std::runtime_error("Unsupported message type.");
 }

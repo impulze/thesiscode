@@ -382,7 +382,7 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 	}
 
 	try {
-		std::vector<std::uint8_t> message_contents;
+		wrap::message message(wrap::message_type::CTRL_OPEN);
 
 		{
 			if (name.size() > std::numeric_limits<std::uint16_t>::max()) {
@@ -390,13 +390,12 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 			}
 
 			// size of name (2 byte) + name
-			message_contents.reserve(2 + name.size());
+			message.size += 2 + name.size();
+			message.contents.resize(2 + name.size());
 			const std::uint16_t size = htons(static_cast<std::uint16_t>(name.size()));
-			std::memcpy(message_contents.data(), &size, 2);
-			std::memcpy(message_contents.data() + 2, name.c_str(), size);
+			std::memcpy(message.contents.data(), &size, 2);
+			std::memcpy(message.contents.data() + 2, name.c_str(), name.size());
 		}
-
-		wrap::message message = create_message(wrap::message_type::CTRL_OPEN, message_contents);
 
 		impl_->client->send_message(message, 1000);
 	} catch (...) {

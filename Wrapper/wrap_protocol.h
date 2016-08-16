@@ -2,6 +2,7 @@
 #define WRAP_PROTOCOL_H_INCLUDED
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace wrap
@@ -32,15 +33,16 @@ enum class message_type : std::uint16_t
  */
 struct message
 {
-	std::uint8_t version;
-	message_type type;
-	std::uint8_t size;
+	message(message_type type);
+
+	void to_bytes(std::vector<std::uint8_t> &bytes) const;
+	static std::shared_ptr<message> from_bytes(std::vector<uint8_t> const &bytes);
+
+	const std::uint8_t version;
+	const message_type type;
+	std::uint16_t size;
 	std::vector<std::uint8_t> contents;
 };
-
-message create_message(message_type type, std::vector<std::uint8_t> const &contents);
-std::vector<std::uint8_t> message_to_bytes(message const &message);
-std::vector<message> extract_messages_from_buffer(std::vector<std::uint8_t> bytes);
 
 }
 

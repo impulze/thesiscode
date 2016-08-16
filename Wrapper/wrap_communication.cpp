@@ -382,18 +382,19 @@ void server_impl::handle_client(client_data &client_data)
 		return;
 	}
 
-	const std::vector<message> messages = extract_messages_from_buffer(client_data.buffer);
+	std::shared_ptr<message> message = message::from_bytes(client_data.buffer);
 
-	if (messages.size() == 0 && client_data.buffer.size() >= READ_BUFFER_MAX) {
+	if (!message && client_data.buffer.size() >= READ_BUFFER_MAX) {
 		fprintf(stderr, "No messages received yet from client <%s> after <%d> bytes.\nForcing disconnect.\n", client_data.address_string.c_str(), READ_BUFFER_MAX);
 		close_socket(client_data.socket);
 		remove_client(client_data);
+		return;
 	}
 
-	for (size_t i = 0; i < messages.size(); i++) {
-		if (callback) {
-			callback(messages[i]);
-		}
+	client_data.buffer.erase(client_data.buffer.begin(), client_data.buffer.begin() + message->size);
+
+	if (callback) {
+		callback(*message);
 	}
 }
 
@@ -537,7 +538,9 @@ client_data &server_impl::lookup_client_by_socket(int socket)
 
 void client_impl::send_message(message const &message)
 {
-	std::vector<std::uint8_t> bytes = message_to_bytes(message);
+	std::vector<std::uint8_t> bytes;
+
+	message.to_bytes(bytes);
 
 #ifndef WIN32
 	ssize_t result = send(socket, bytes.data(), bytes.size(), 0);
@@ -647,9 +650,7 @@ message client::send_message(message const &message, int timeout_ms)
 		assert(false);
 	}
 
-	wrap::message new_message;
-
-	return new_message;
+	return wrap::message(message_type::CTRL_OPEN_RESPONSE);
 }
 
 timeout_exception::timeout_exception(std::string const &error_msg)
