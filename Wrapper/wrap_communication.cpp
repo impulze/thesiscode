@@ -1,5 +1,6 @@
 #include "wrap_communication.h"
 #include "wrap_protocol.h"
+#include "wrap_mmictrl.h"
 
 #include <cassert>
 #include <cerrno>
@@ -7,6 +8,8 @@
 #include <cstdio>
 #include <cstring>
 #include <locale>
+#include <map>
+#include <memory>
 #include <sstream>
 #include <vector>
 
@@ -20,11 +23,13 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #define close_socket(fd) close(fd)
+typedef int socket_type;
 #else
 #include "string.h"
 #include "winsock2.h"
 #include "ws2tcpip.h"
 #define close_socket(sock) closesocket(sock)
+typedef SOCKET socket_type;
 #endif
 
 // incremental buffer size
@@ -60,12 +65,30 @@ static std::string address_to_string(const sockaddr_storage *address, int family
 
 struct client_data
 {
-	int socket;
+	void send_message(wrap::message const &message);
+
+	socket_type socket;
 	std::string address_string;
 	std::vector<std::uint8_t> buffer;
 	typedef std::vector<std::uint8_t>::size_type buffer_size_type;
+
+#ifndef WIN32
+	struct pollfd pollfd;
+#else
+	WSAPOLLFD pollfd;
+#endif
 };
 
+struct client_local_control
+	: wrap::local_control
+{
+	template <class... T>
+	client_local_control(T &&... args);
+
+	void handle_message(wrap::callback_type_type type, unsigned long parameter) override;
+};
+
+static std::map<std::uint16_t, std::unique_ptr<client_local_control>> g_controls;
 
 namespace wrap
 {
@@ -77,9 +100,9 @@ struct server_impl
 	void remove_client(client_data &client_data);
 	void new_client();
 	void handle_client(client_data &client_data);
-	client_data &lookup_client_by_socket(int socket);
+	client_data &lookup_client_by_socket(socket_type socket);
 
-	int socket;
+	socket_type socket;
 	std::vector<client_data> clients;
 	typedef std::vector<client_data>::size_type clients_size_type;
 
@@ -96,14 +119,7 @@ struct server_impl
 
 struct client_impl
 {
-	void send_message(message const &message);
-
-	int socket;
-#ifndef WIN32
-	struct pollfd pollfd;
-#else
-	WSAPOLLFD pollfd;
-#endif
+	client_data data;
 };
 
 }
@@ -280,6 +296,38 @@ std::string address_to_string(const sockaddr_storage *address, int family)
 	throw errno_error("inet_ntop");
 }
 
+void client_data::send_message(wrap::message const &message)
+{
+	std::vector<std::uint8_t> bytes;
+
+	message.to_bytes(bytes);
+
+	printf("%d\n", socket);
+#ifndef WIN32
+	ssize_t result = send(socket, bytes.data(), bytes.size(), 0);
+#else
+	int result = send(socket, reinterpret_cast<char *>(bytes.data()), bytes.size(), 0);
+#endif
+
+	if (result != bytes.size()) {
+		int old_errno = errno;
+		fprintf(stderr, "Not all of the bytes sent to server.\n");
+		close_socket(socket);
+		errno = old_errno;
+		throw errno_error("send");
+	}
+}
+
+template <class... T>
+client_local_control::client_local_control(T &&... args)
+	: local_control(std::forward<T>(args)...)
+{
+}
+
+void client_local_control::handle_message(wrap::callback_type_type type, unsigned long parameter)
+{
+}
+
 namespace wrap
 {
 
@@ -382,7 +430,7 @@ void server_impl::handle_client(client_data &client_data)
 		return;
 	}
 
-	std::shared_ptr<message> message = message::from_bytes(client_data.buffer);
+	std::unique_ptr<message> message = message::from_bytes(client_data.buffer);
 
 	if (!message) {
 		if (client_data.buffer.size() >= READ_BUFFER_MAX) {
@@ -397,6 +445,62 @@ void server_impl::handle_client(client_data &client_data)
 	if (callback) {
 		callback(*message);
 	}
+
+	std::unique_ptr<wrap::message> response;
+
+	try {
+		switch (message->type) {
+			case wrap::message_type::SERVER_ERROR:
+				break;
+			case wrap::message_type::CTRL_OPEN: {
+				static bool rand_initialized = false;
+
+				if (!rand_initialized) {
+					rand_initialized = true;
+					std::srand(static_cast<unsigned>(std::time(NULL)));
+				}
+
+				std::uint16_t nlength;
+				std::memcpy(&nlength, message->contents.data(), 2);
+				const std::uint16_t length = ntohs(nlength);
+				std::string name(message->contents.data() + 2, message->contents.data() + 2 + length);
+
+				std::unique_ptr<client_local_control> new_control;
+
+				const std::uint16_t max_id = static_cast<std::uint16_t>((std::numeric_limits<std::uint16_t>::max)());
+
+				if (g_controls.size() == max_id) {
+					// No more space TODO
+				}
+
+				response.reset(new wrap::message(wrap::message_type::CTRL_OPEN_RESPONSE));
+
+				const std::uint16_t id = static_cast<std::uint16_t>(g_controls.size());
+
+				try {
+					new_control.reset(new client_local_control(name));
+				} 	catch (std::exception const &exception) {
+					std::fprintf(stderr, "Unable to open control to <%s>\n.%s\n", name.c_str(), exception.what());
+					response->append(static_cast<std::uint8_t>(1));
+					response->append(exception.what());
+					break;
+				}
+
+				g_controls[id] = std::move(new_control);
+
+				response->append(static_cast<std::uint8_t>(0));
+				response->append(id);
+			}
+
+			default:
+				assert(false);
+		}
+	} catch (std::exception const &exception) {
+		response.reset(new wrap::message(wrap::message_type::SERVER_ERROR));
+		response->append(exception.what());
+	}
+
+	client_data.send_message(*response);
 }
 
 server::server(std::string const &address, std::uint16_t port)
@@ -526,7 +630,7 @@ void server::set_message_callback(std::function<void(message const &message)> ca
 	impl_->callback = callback;
 }
 
-client_data &server_impl::lookup_client_by_socket(int socket)
+client_data &server_impl::lookup_client_by_socket(socket_type socket)
 {
 	for (size_t i = 0; i < clients.size(); i++) {
 		if (clients[i].socket == socket) {
@@ -535,27 +639,6 @@ client_data &server_impl::lookup_client_by_socket(int socket)
 	}
 
 	throw std::runtime_error("There's no client for that specific socket.");
-}
-
-void client_impl::send_message(message const &message)
-{
-	std::vector<std::uint8_t> bytes;
-
-	message.to_bytes(bytes);
-
-#ifndef WIN32
-	ssize_t result = send(socket, bytes.data(), bytes.size(), 0);
-#else
-	int result = send(socket, reinterpret_cast<char *>(bytes.data()), bytes.size(), 0);
-#endif
-
-	if (result != bytes.size()) {
-		int old_errno = errno;
-		fprintf(stderr, "Not all of the bytes sent to server.\n");
-		close_socket(socket);
-		errno = old_errno;
-		throw errno_error("send");
-	}
 }
 
 client::client(std::string const &address, std::uint16_t port)
@@ -581,9 +664,9 @@ client::client(std::string const &address, std::uint16_t port)
 
 	const lookup_entry &used_entry = entries[0];
 
-	impl_->socket = socket(used_entry.family, used_entry.socket_type, used_entry.protocol);
+	impl_->data.socket = socket(used_entry.family, used_entry.socket_type, used_entry.protocol);
 
-	if (impl_->socket < 0) {
+	if (impl_->data.socket < 0) {
 		delete impl_;
 		throw errno_error("socket");
 	}
@@ -594,36 +677,36 @@ client::client(std::string const &address, std::uint16_t port)
 		address_string = address_to_string(&used_entry.address, used_entry.family);
 	} catch (std::exception const &exception) {
 		static_cast<void>(exception);
-		close_socket(impl_->socket);
+		close_socket(impl_->data.socket);
 		delete impl_;
 		throw;
 	}
 
 	printf("Initiate connection to <%s>:<%hu>\n", address_string.c_str(), port);
 
-	const int result = connect(impl_->socket, reinterpret_cast<const sockaddr *>(&used_entry.address), used_entry.address_length);
+	const int result = connect(impl_->data.socket, reinterpret_cast<const sockaddr *>(&used_entry.address), used_entry.address_length);
 
 	if (result != 0) {
-		close_socket(impl_->socket);
+		close_socket(impl_->data.socket);
 		delete impl_;
 		throw errno_error("connect");
 	}
 
-	impl_->pollfd.fd = impl_->socket;
-	impl_->pollfd.events = POLLIN;
-	impl_->pollfd.revents = 0;
+	impl_->data.pollfd.fd = impl_->data.socket;
+	impl_->data.pollfd.events = POLLIN;
+	impl_->data.pollfd.revents = 0;
 }
 
 client::~client()
 {
-	close_socket(impl_->socket);
+	close_socket(impl_->data.socket);
 	delete impl_;
 }
 
 message client::send_message(message const &message, int timeout_ms)
 {
 	try {
-		impl_->send_message(message);
+		impl_->data.send_message(message);
 	} catch (std::exception const &exception) {
 		static_cast<void>(exception);
 		throw;
@@ -632,7 +715,7 @@ message client::send_message(message const &message, int timeout_ms)
 #ifndef WIN32
 	const int result = poll(&(impl_->pollfd), 1, timeout_ms);
 #else
-	const int result = WSAPoll(&(impl_->pollfd), 1, timeout_ms);
+	const int result = WSAPoll(&(impl_->data.pollfd), 1, timeout_ms);
 #endif
 
 	if (result < 0) {
@@ -643,9 +726,9 @@ message client::send_message(message const &message, int timeout_ms)
 		throw timeout_exception("Error fetching message response.");
 	}
 
-	if (impl_->pollfd.revents & POLLIN) {
+	if (impl_->data.pollfd.revents & POLLIN) {
 		//...
-	} else if (impl_->pollfd.revents & (POLLHUP|POLLERR|POLLNVAL)) {
+	} else if (impl_->data.pollfd.revents & (POLLHUP|POLLERR|POLLNVAL)) {
 		throw std::runtime_error("Unexpected polling state for client descriptor.");
 	} else {
 		assert(false);

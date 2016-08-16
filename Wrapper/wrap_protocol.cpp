@@ -38,9 +38,9 @@ void message::to_bytes(std::vector<std::uint8_t> &bytes) const
 	bytes.insert(bytes.end(), contents.begin(), contents.end());
 }
 
-std::shared_ptr<message> message::from_bytes(std::vector<std::uint8_t> &bytes)
+std::unique_ptr<message> message::from_bytes(std::vector<std::uint8_t> &bytes)
 {
-	std::shared_ptr<message> message;
+	std::unique_ptr<message> message;
 
 	if (bytes.size() < 6) {
 		std::printf("Not enough message data yet.\n");
@@ -98,11 +98,77 @@ std::shared_ptr<message> message::from_bytes(std::vector<std::uint8_t> &bytes)
 	return message;
 }
 
+void message::append(std::string const &string)
+{
+	const std::uint16_t current_contents_size = static_cast<std::uint16_t>(contents.size());
+	const std::uint16_t append_size = static_cast<std::uint16_t>(2 + string.size());
+
+	if (size + append_size > (std::numeric_limits<std::uint16_t>::max)()) {
+		throw std::runtime_error("String too long for message.");
+	}
+
+	// size of name (2 byte) + name
+	size += append_size;
+	contents.resize(current_contents_size + append_size);
+
+	const std::uint16_t nlength = htons(static_cast<std::uint16_t>(string.size()));
+	std::memcpy(contents.data() + current_contents_size, &nlength, 2);
+	std::memcpy(contents.data() + current_contents_size + 2, string.c_str(), string.size());
+}
+
+void message::append(std::uint8_t byte)
+{
+	const std::uint16_t current_contents_size = static_cast<std::uint16_t>(contents.size());
+	const std::uint16_t append_size = static_cast<std::uint16_t>(1);
+
+	if (size + append_size > (std::numeric_limits<std::uint16_t>::max)()) {
+		throw std::runtime_error("Message already full.");
+	}
+
+	size += append_size;
+	contents.resize(current_contents_size + append_size);
+	*(contents.data() + current_contents_size) = byte;
+}
+
+void message::append(std::uint16_t number)
+{
+	const std::uint16_t current_contents_size = static_cast<std::uint16_t>(contents.size());
+	const std::uint16_t append_size = static_cast<std::uint16_t>(2);
+
+	if (size + append_size > (std::numeric_limits<std::uint16_t>::max)()) {
+		throw std::runtime_error("Message already full.");
+	}
+
+	size += append_size;
+	contents.resize(current_contents_size + append_size);
+
+	const std::uint16_t nnumber = htons(number);
+	std::memcpy(contents.data() + current_contents_size, &nnumber, 2);
+}
+
+void message::append(std::uint32_t number)
+{
+	const std::uint16_t current_contents_size = static_cast<std::uint16_t>(contents.size());
+	const std::uint16_t append_size = static_cast<std::uint16_t>(4);
+
+	if (size + append_size > (std::numeric_limits<std::uint16_t>::max)()) {
+		throw std::runtime_error("Message already full.");
+	}
+
+	size += append_size;
+	contents.resize(current_contents_size + append_size);
+
+	const std::uint32_t nnumber = htonl(number);
+	std::memcpy(contents.data() + current_contents_size, &nnumber, 4);
+}
+
 }
 
 bool valid_message_type(std::uint16_t check_type)
 {
 	switch (static_cast<wrap::message_type>(check_type)) {
+		case wrap::message_type::SERVER_ERROR:
+			return true;
 		case wrap::message_type::CTRL_OPEN:
 			return true;
 		case wrap::message_type::CTRL_OPEN_RESPONSE:

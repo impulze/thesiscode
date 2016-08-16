@@ -280,20 +280,7 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 
 	try {
 		wrap::message message(wrap::message_type::CTRL_OPEN);
-
-		{
-			if (name.size() + 2 > (std::numeric_limits<std::uint16_t>::max)()) {
-				throw std::runtime_error("Name too long.");
-			}
-
-			// size of name (2 byte) + name
-			message.size += static_cast<std::uint16_t>(2 + name.size());
-			message.contents.resize(2 + name.size());
-			const std::uint16_t size = htons(static_cast<std::uint16_t>(name.size()));
-			std::memcpy(message.contents.data(), &size, 2);
-			std::memcpy(message.contents.data() + 2, name.c_str(), name.size());
-		}
-
+		message.append(name);
 		impl_->client->send_message(message, 1000);
 	} catch (...) {
 		delete impl_;

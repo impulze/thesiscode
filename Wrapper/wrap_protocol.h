@@ -19,6 +19,7 @@ enum class message_special : std::uint8_t
  */
 enum class message_type : std::uint16_t
 {
+	SERVER_ERROR,
 	CTRL_OPEN,
 	CTRL_OPEN_RESPONSE,
 };
@@ -36,7 +37,12 @@ struct message
 	message(message_type type);
 
 	void to_bytes(std::vector<std::uint8_t> &bytes) const;
-	static std::shared_ptr<message> from_bytes(std::vector<uint8_t> &bytes);
+	static std::unique_ptr<message> from_bytes(std::vector<uint8_t> &bytes);
+
+	void append(std::string const &string);
+	void append(std::uint8_t byte);
+	void append(std::uint16_t number);
+	void append(std::uint32_t number);
 
 	const std::uint8_t version;
 	const message_type type;

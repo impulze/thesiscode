@@ -5,7 +5,9 @@
 #include <cmath>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <memory>
 
 // TODO
@@ -21,17 +23,6 @@ static bool g_run_server = true;
 
 static void sigint_handler(int signal_number);
 static void handle_message(wrap::message const &message);
-
-static std::unique_ptr<wrap::control> g_control;
-
-struct my_local_control
-	: wrap::local_control
-{
-	template <class... T>
-	my_local_control(T &&... args);
-
-	virtual void handle_message(wrap::callback_type_type type, unsigned long param) override;
-};
 
 int server_main(int argc, char **argv)
 {
@@ -93,10 +84,8 @@ int server_main(int argc, char **argv)
 	}
 #endif
 
-#if 1
 	try {
 		wrap::server server("10.0.0.138", 44455);
-		g_control.reset(new my_local_control("CNC1"));
 
 		std::signal(SIGINT, sigint_handler);
 
@@ -104,7 +93,7 @@ int server_main(int argc, char **argv)
 
 		while (g_run_server) {
 			try {
-				server.run_one(2000);
+				server.run_one(500);
 			} catch (wrap::timeout_exception const &exception) {
 				static_cast<void>(exception);
 			}
@@ -114,7 +103,6 @@ int server_main(int argc, char **argv)
 		WSACleanup();
 		return 1;
 	}
-#endif
 
 	WSACleanup();
 
@@ -133,22 +121,9 @@ void sigint_handler(int signal_number)
 void handle_message(wrap::message const &message)
 {
 	printf("received message %hu\n", message.type);
-	if (message.type == wrap::message_type::CTRL_OPEN) {
-		std::uint16_t size;
-		std::memcpy(&size, message.contents.data(), 2);
-		size = ntohs(size);
-		std::string name(message.contents.data() + 2, message.contents.data() + 2 + size);
-		std::printf("open name: '%s'\n", name.c_str());
-
-	}
 }
 
-template <class... T>
-my_local_control::my_local_control(T &&... args)
-	: local_control(std::forward<T>(args)...)
-{
-}
-
+/*
 void my_local_control::handle_message(wrap::callback_type_type type, unsigned long parameter)
 {
 	std::string type_string;
@@ -190,3 +165,4 @@ void my_local_control::handle_message(wrap::callback_type_type type, unsigned lo
 
 	std::printf("Received CNC mssage: %s: %lu\n", type_string.c_str(), parameter);
 };
+*/

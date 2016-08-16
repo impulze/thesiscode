@@ -101,7 +101,7 @@ int client_main(int argc, char **argv)
 	try {
 		my_remote_control ctrl("CNC1", "10.0.0.138", 44455);
 	} catch (std::exception const &exception) {
-		std::fprintf(stderr, "Exception while running server.\n%s\n", exception.what());
+		std::fprintf(stderr, "Exception while running client.\n%s\n", exception.what());
 #ifdef WIN32
 		WSACleanup();
 #endif
