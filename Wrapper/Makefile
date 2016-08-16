@@ -6,4 +6,4 @@ LINK.o = $(CXX) $(LDFLAGS) $(TARGET_ARCH)
 all: client
 
 server: $(BASE_OBJECTS) server.o
-client: $(BASE_OBJECTS) client.o
+client: $(BASE_OBJECTS) client.o main.o

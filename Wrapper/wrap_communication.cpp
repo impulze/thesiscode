@@ -79,6 +79,7 @@ struct client_data
 #endif
 };
 
+#ifdef WIN32
 struct client_local_control
 	: wrap::local_control
 {
@@ -89,6 +90,7 @@ struct client_local_control
 };
 
 static std::map<std::uint16_t, std::unique_ptr<client_local_control>> g_controls;
+#endif
 
 namespace wrap
 {
@@ -318,6 +320,7 @@ void client_data::send_message(wrap::message const &message)
 	}
 }
 
+#ifdef WIN32
 template <class... T>
 client_local_control::client_local_control(T &&... args)
 	: local_control(std::forward<T>(args)...)
@@ -327,6 +330,7 @@ client_local_control::client_local_control(T &&... args)
 void client_local_control::handle_message(wrap::callback_type_type type, unsigned long parameter)
 {
 }
+#endif
 
 namespace wrap
 {
@@ -450,8 +454,7 @@ void server_impl::handle_client(client_data &client_data)
 
 	try {
 		switch (message->type) {
-			case wrap::message_type::SERVER_ERROR:
-				break;
+#ifdef WIN32
 			case wrap::message_type::CTRL_OPEN: {
 				static bool rand_initialized = false;
 
@@ -490,10 +493,13 @@ void server_impl::handle_client(client_data &client_data)
 
 				response->append(static_cast<std::uint8_t>(0));
 				response->append(id);
+				break;
 			}
+#endif
 
 			default:
-				assert(false);
+				response.reset(new wrap::message(wrap::message_type::OK));
+				break;
 		}
 	} catch (std::exception const &exception) {
 		response.reset(new wrap::message(wrap::message_type::SERVER_ERROR));
@@ -713,7 +719,7 @@ message client::send_message(message const &message, int timeout_ms)
 	}
 
 #ifndef WIN32
-	const int result = poll(&(impl_->pollfd), 1, timeout_ms);
+	const int result = poll(&(impl_->data.pollfd), 1, timeout_ms);
 #else
 	const int result = WSAPoll(&(impl_->data.pollfd), 1, timeout_ms);
 #endif

@@ -19,6 +19,7 @@ enum class message_special : std::uint8_t
  */
 enum class message_type : std::uint16_t
 {
+	OK,
 	SERVER_ERROR,
 	CTRL_OPEN,
 	CTRL_OPEN_RESPONSE,

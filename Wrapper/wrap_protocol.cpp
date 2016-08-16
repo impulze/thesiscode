@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 
 #ifdef WIN32
