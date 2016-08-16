@@ -18,7 +18,8 @@ enum class message_special : std::uint8_t
  */
 enum class message_type : std::uint16_t
 {
-	CHECK
+	CTRL_OPEN,
+	CTRL_OPEN_RESPONSE,
 };
 
 /*

@@ -103,7 +103,9 @@ std::vector<std::uint8_t> message_to_bytes(message const &message)
 bool valid_message_type(std::uint16_t check_type)
 {
 	switch (static_cast<wrap::message_type>(check_type)) {
-		case wrap::message_type::CHECK:
+		case wrap::message_type::CTRL_OPEN:
+			return true;
+		case wrap::message_type::CTRL_OPEN_RESPONSE:
 			return true;
 	}
 
@@ -113,8 +115,10 @@ bool valid_message_type(std::uint16_t check_type)
 std::uint8_t size_for_message_type(wrap::message_type type)
 {
 	switch (type) {
-		case wrap::message_type::CHECK:
+		case wrap::message_type::CTRL_OPEN:
 			return 13;
+		case wrap::message_type::CTRL_OPEN_RESPONSE:
+			return 14;
 	}
 
 	throw std::runtime_error("Unsupported message type.");

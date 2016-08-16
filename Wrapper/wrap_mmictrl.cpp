@@ -43,19 +43,20 @@ MAKE_FUN_PTR_AND_VAR(ncrSendFileBlocked, LONG, HANDLE, LPCSTR, LPCSTR, LONG)
 MAKE_FUN_PTR_AND_VAR(ncrSendMessage, BOOL, HANDLE, MSG_TR *)
 MAKE_FUN_PTR_AND_VAR(ncrReadParamArray, BOOL, HANDLE, WORD *, double *, WORD)
 
-static std::map<LPVOID, wrap::control *> g_control_mapping;
 static bool g_dll_loaded;
 
+static std::map<LPVOID, wrap::control *> g_control_mapping;
 static void WINAPI callback(ULONG type, ULONG param, LPVOID context);
 static void load_cnc_dlls();
 static std::string error_string_from_win32_error(DWORD win32_error);
 static void throw_transfer_exception(LONG result);
 static LONG block_type_conversion(wrap::transfer_block_type type);
+static wrap::callback_type_type conversion_callback_type_type(LONG type);
 
 namespace wrap
 {
 
-struct control::impl
+struct local_control::local_impl
 {
 	HANDLE handle;
 };
@@ -123,7 +124,19 @@ transfer_exception_error transfer_exception_error::create(transfer_status_type t
 	return transfer_exception_error(strm.str(), type, win32_error);
 }
 
-control::control(std::string const &name, callback_function_type const &callback)
+control::~control()
+{
+	for (std::map<LPVOID, control *>::iterator it = g_control_mapping.begin(); it != g_control_mapping.end();) {
+		if (it->first == this) {
+			it = g_control_mapping.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
+}
+
+local_control::local_control(std::string const &name)
 {
 	if (!g_dll_loaded) {
 		load_cnc_dlls();
@@ -136,22 +149,31 @@ control::control(std::string const &name, callback_function_type const &callback
 		throw error::create_error();
 	}
 
-	impl_ = new impl();
+	impl_ = new local_impl();
 	impl_->handle = handle;
+
+	try {
+		g_control_mapping[this] = this;
+	}
+	catch (...) {
+		delete impl_;
+		throw;
+	}
 }
 
-control::~control()
+local_control::~local_control()
 {
 	ncrCloseControl_p(impl_->handle);
+
 	delete impl_;
 }
 
-bool control::get_init_state()
+bool local_control::get_init_state()
 {
 	return ncrGetInitState_p(impl_->handle) == 1;
 }
 
-void control::load_firmware_blocked(std::string const &config_name)
+void local_control::load_firmware_blocked(std::string const &config_name)
 {
 	const LONG result = ncrLoadFirmwareBlocked_p(impl_->handle, config_name.c_str());
 
@@ -164,7 +186,7 @@ void control::load_firmware_blocked(std::string const &config_name)
 	throw error::create_error();
 }
 
-void control::send_file_blocked(std::string const &name, std::string const &header,
+void local_control::send_file_blocked(std::string const &name, std::string const &header,
                                 transfer_block_type type)
 {
 	const LONG long_type = block_type_conversion(type);
@@ -173,7 +195,7 @@ void control::send_file_blocked(std::string const &name, std::string const &head
 	throw_transfer_exception(result);
 }
 
-void control::send_message(MSG_TR *message)
+void local_control::send_message(MSG_TR *message)
 {
 	const BOOL result = ncrSendMessage_p(impl_->handle, message);
 
@@ -184,7 +206,7 @@ void control::send_message(MSG_TR *message)
 	throw error::create_error();
 }
 
-void control::read_param_array(std::map<std::uint16_t, double> &parameters)
+void local_control::read_param_array(std::map<std::uint16_t, double> &parameters)
 {
 	if (parameters.size() > 0xFFFF) {
 		throw std::runtime_error("Only 16-bit size allowed for read_param_array.");
@@ -219,11 +241,19 @@ void control::read_param_array(std::map<std::uint16_t, double> &parameters)
 
 }
 
-static void WINAPI callback(ULONG type, ULONG param, LPVOID context)
+void WINAPI callback(ULONG type, ULONG param, LPVOID context)
 {
+	for (auto &entry : g_control_mapping) {
+		if (entry.first == context) {
+			entry.second->handle_message(conversion_callback_type_type(type), param);
+			return;
+		}
+	}
+
+	assert(false);
 }
 
-static void load_cnc_dlls()
+void load_cnc_dlls()
 {
 	const HMODULE module = LoadLibrary(L"mmictrl.dll");
 
@@ -241,7 +271,7 @@ static void load_cnc_dlls()
 	LOAD_FUN(ncrReadParamArray, module)
 }
 
-static std::string error_string_from_win32_error(DWORD win32_error)
+std::string error_string_from_win32_error(DWORD win32_error)
 {
 	if (win32_error & (1 << 29)) {
 		const std::uint8_t subsystem = static_cast<std::uint8_t>((win32_error >> 16) & 0xFF);
@@ -270,7 +300,7 @@ static std::string error_string_from_win32_error(DWORD win32_error)
 	return converter.to_bytes(message);
 }
 
-static void throw_transfer_exception(LONG result)
+void throw_transfer_exception(LONG result)
 {
 	switch (result) {
 		case TRANSFER_OK:
@@ -290,7 +320,7 @@ static void throw_transfer_exception(LONG result)
 	}
 }
 
-static LONG block_type_conversion(wrap::transfer_block_type type)
+LONG block_type_conversion(wrap::transfer_block_type type)
 {
 	switch (type) {
 		case wrap::transfer_block_type::NC_PROGRAMM:
@@ -319,6 +349,48 @@ static LONG block_type_conversion(wrap::transfer_block_type type)
 			return SB1_CAN1_OBJECT_KUC;
 		case wrap::transfer_block_type::CAN_DRIVE_OBJEKT:
 			return SB1_CAN2_OBJECT_KUC;
+		default:
+			assert(false);
+	}
+
+	throw std::runtime_error("Assertion.");
+}
+
+wrap::callback_type_type conversion_callback_type_type(LONG type)
+{
+	switch (type) {
+		case VK_MMI_DOWNLOAD_STATE:
+			return wrap::callback_type_type::MMI_DOWNLOAD_STATE;
+		case VK_MMI_DOWNLOAD_PART:
+			return wrap::callback_type_type::MMI_DOWNLOAD_PART;
+		case VK_MMI_DOWNLOAD_COMPLETE:
+			return wrap::callback_type_type::MMI_DOWNLOAD_COMPLETE;
+		case VK_MMI_DOWNLOAD_ERROR:
+			return wrap::callback_type_type::MMI_DOWNLOAD_ERROR;
+		case VK_MMI_TRANSFER_STATE:
+			return wrap::callback_type_type::MMI_TRANSFER_STATE;
+		case VK_MMI_TRANSFER_OK:
+			return wrap::callback_type_type::MMI_TRANSFER_OK;
+		case VK_MMI_TRANSFER_ERROR:
+			return wrap::callback_type_type::MMI_TRANSFER_ERROR;
+		case VK_MMI_TRANSFER_BREAK:
+			return wrap::callback_type_type::MMI_TRANSFER_BREAK;
+		case VK_MMI_NCMSG_SENT:
+			return wrap::callback_type_type::MMI_NCMSG_SENT;
+		case VK_MMI_NCMSG_NOT_SENT:
+			return wrap::callback_type_type::MMI_NCMSG_NOT_SENT;
+		case VK_MMI_NCMSG_RECEIVED:
+			return wrap::callback_type_type::MMI_NCMSG_RECEIVED;
+		case VK_MMI_ERROR_MSG:
+			return wrap::callback_type_type::MMI_ERROR_MSG;
+		case VK_MMI_CYCLIC_CALL:
+			return wrap::callback_type_type::MMI_CYCLIC_CALL;
+		case VK_MMI_DEFAPP_STATE:
+			return wrap::callback_type_type::MMI_DEFAPP_STATE;
+		case VK_MMI_CAN_TRANSFER_STATE:
+			return wrap::callback_type_type::MMI_CAN_TRANSFER_STATE;
+		case VK_MMI_CAN_TRANSFER_COMPLETE:
+			return wrap::callback_type_type::MMI_CAN_TRANSFER_COMPLETE;
 		default:
 			assert(false);
 	}

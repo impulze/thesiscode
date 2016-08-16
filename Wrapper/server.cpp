@@ -15,13 +15,19 @@
 #include "com_def.h"
 #include "com_sbx.h"
 
-
 static bool g_run_server = true;
 
 static void sigint_handler(int signal_number);
 static void handle_message(wrap::message const &message);
 
-static void handle_cnc_message(wrap::callback_type_type type, unsigned long param, wrap::context_pointer_type ctx);
+struct my_local_control
+	: wrap::local_control
+{
+	template <class... T>
+	my_local_control(T &&... args);
+
+	virtual void handle_message(wrap::callback_type_type type, unsigned long param) override;
+};
 
 int main(int argc, char **argv)
 {
@@ -40,9 +46,9 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-#if 0
+#if 1
 	try {
-		wrap::control ctrl("CNC1", handle_cnc_message);
+		my_local_control ctrl("CNC1");
 		std::map<std::uint16_t, double> params;
 
 		for (int i = 0; i < 1024; i++) {
@@ -50,7 +56,6 @@ int main(int argc, char **argv)
 		}
 
 		printf("init state: %d\n", ctrl.get_init_state());
-		/*
 		ctrl.load_firmware_blocked("C:\\Eckelmann\\StdHMI\\log\\download.cfg");
 		ctrl.send_file_blocked("C:\\Eckelmann\\StdHMI\\log\\vom_nc.mk", "", wrap::transfer_block_type::MASCHINENKONSTANTEN);
 		ctrl.send_file_blocked("C:\\Eckelmann\\StdHMI\\Prg\\KUGEL.DIN", "", wrap::transfer_block_type::NC_PROGRAMM);
@@ -62,7 +67,6 @@ int main(int argc, char **argv)
 		tr.n.startprog_r.prognr_us = 0x01;
 		tr.n.startprog_r.satznr_us = 0x0;
 		ctrl.send_message(&tr);
-		*/
 		ctrl.read_param_array(params);
 
 		Sleep(2000);
@@ -106,7 +110,7 @@ int main(int argc, char **argv)
 	WSACleanup();
 }
 
-static void sigint_handler(int signal_number)
+void sigint_handler(int signal_number)
 {
 	static_cast<void>(signal_number);
 
@@ -115,13 +119,56 @@ static void sigint_handler(int signal_number)
 	g_run_server = false;
 }
 
-static void handle_message(wrap::message const &message)
+void handle_message(wrap::message const &message)
 {
 	printf("received message %hu\n", message.type);
 	printf("string: %s\n", message.contents.data());
 }
 
-static void handle_cnc_message(wrap::callback_type_type type, unsigned long param, wrap::context_pointer_type ctx)
+template <class... T>
+my_local_control::my_local_control(T &&... args)
+	: local_control(std::forward<T>(args)...)
 {
-	std::printf("callback\n");
 }
+
+void my_local_control::handle_message(wrap::callback_type_type type, unsigned long param)
+{
+	std::string type_string;
+
+	switch (type) {
+		case wrap::callback_type_type::MMI_DOWNLOAD_STATE:
+			type_string = "Download State"; break;
+		case wrap::callback_type_type::MMI_DOWNLOAD_PART:
+			type_string = "Download Part"; break;
+		case wrap::callback_type_type::MMI_DOWNLOAD_COMPLETE:
+			type_string = "Download Complete"; break;
+		case wrap::callback_type_type::MMI_DOWNLOAD_ERROR:
+			type_string = "Download Error"; break;
+		case wrap::callback_type_type::MMI_TRANSFER_STATE:
+			type_string = "Transfer State"; break;
+		case wrap::callback_type_type::MMI_TRANSFER_OK:
+			type_string = "Transfer OK"; break;
+		case wrap::callback_type_type::MMI_TRANSFER_ERROR:
+			type_string = "Transfer Error"; break;
+		case wrap::callback_type_type::MMI_TRANSFER_BREAK:
+			type_string = "Transfer Break"; break;
+		case wrap::callback_type_type::MMI_NCMSG_SENT:
+			type_string = "NCMSG Sent"; break;
+		case wrap::callback_type_type::MMI_NCMSG_NOT_SENT:
+			type_string = "NCMSG Not Sent"; break;
+		case wrap::callback_type_type::MMI_NCMSG_RECEIVED:
+			type_string = "NCMSG Received"; break;
+		case wrap::callback_type_type::MMI_ERROR_MSG:
+			type_string = "Error MSG"; break;
+		case wrap::callback_type_type::MMI_CYCLIC_CALL:
+			type_string = "Cyclic Call"; break;
+		case wrap::callback_type_type::MMI_DEFAPP_STATE:
+			type_string = "DefApp State"; break;
+		case wrap::callback_type_type::MMI_CAN_TRANSFER_STATE:
+			type_string = "CAN Transfer State"; break;
+		case wrap::callback_type_type::MMI_CAN_TRANSFER_COMPLETE:
+			type_string = "CAN Transfer Complete"; break;
+	}
+
+	std::printf("Received CNC mssage: %s: %lu\n", type_string.c_str(), param);
+};

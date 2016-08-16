@@ -1,11 +1,12 @@
-#ifndef WRAP_CNC_H_INCLUDED
-#define WRAP_CNC_H_INCLUDED
+#ifndef WRAP_MMICTRL_H_INCLUDED
+#define WRAP_MMICTRL_H_INCLUDED
 
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 // TODO:
@@ -22,10 +23,6 @@ struct error
 	static error create_error();
 
 	const std::uint32_t win32_error;
-};
-
-struct handle_type
-{
 };
 
 struct transfer_type
@@ -62,8 +59,6 @@ struct can_transfer_state_tr_type
 	std::shared_ptr<can_object_desc_tr_type> act_object; // aktuelles Objekt
 };
 
-typedef std::shared_ptr<handle_type> context_pointer_type;
-
 enum class callback_type_type
 {
 	/*
@@ -72,55 +67,55 @@ enum class callback_type_type
 	 * ncrGetTransferState und ncrGetTransferType können im Callback verwendet werden,
 	 * um Übertragungsstatus abzufragen.
 	 */
-	VK_MMI_DOWNLOAD_STATE,
-	VK_MMI_DOWNLOAD_PART,
-	VK_MMI_DOWNLOAD_COMPLETE,
-	VK_MMI_DOWNLOAD_ERROR,
+	MMI_DOWNLOAD_STATE,
+	MMI_DOWNLOAD_PART,
+	MMI_DOWNLOAD_COMPLETE,
+	MMI_DOWNLOAD_ERROR,
 	/*
 	 * Statusmeldungen einer laufenden Dateiübertragung zwischen PC und Steuerung.
 	 * ulParam enthält den Transfer-Handle der entsprechenden Übertragung.
 	 * ncrGetTransferState und ncrGetTransferType können im Callback verwendet werden,
 	 * um Übertragungsstatus abzufragen.
 	 */
-	VK_MMI_TRANSFER_STATE,
-	VK_MMI_TRANSFER_OK,
-	VK_MMI_TRANSFER_ERROR,
-	VK_MMI_TRANSFER_BREAK,
+	MMI_TRANSFER_STATE,
+	MMI_TRANSFER_OK,
+	MMI_TRANSFER_ERROR,
+	MMI_TRANSFER_BREAK,
 	/*
 	 * Typen für ncrPostMessage
 	 * Wenn iRespKey bei ncrPostMessage = -1, dann wird _SENT im Callback geschickt.
 	 * Bei einem Fehler in der Übertragung zur Steuerung, wird _NOT_SENT im Callback
 	 * geschickt und ulParam = iRespKey.
 	 */
-	VK_MMI_NCMSG_SENT,
-	VK_MMI_NCMSG_NOT_SENT,
+	MMI_NCMSG_SENT,
+	MMI_NCMSG_NOT_SENT,
 	/*
 	 * Empfang einer Nachricht der Steuerung, die nicht von der DLL ausgewertet werden kann.
 	 * ulParam = Pointer auf MSG_TR-Struktur (Speicher nur innerhalb des Callbacks gültig).
 	 */
-	VK_MMI_NCMSG_RECEIVED,
+	MMI_NCMSG_RECEIVED,
 	/*
 	 * Übergabe von Fehlermeldungen von Steuerung, Gateway oder DLL.
 	 * ulParam = Pointer auf MSG_TR-Struktur (Speicher nur innerhalb des Callbacks gültig).
 	 * Fehlermeldungen der Klasse 3 und 4 müssen quittiert werden (Senden von
 	 * SB1_FEHLERQUITTING_KUC oder SB1_FEHLERQUITTING_ALLE_KUC an die Steuerung).
 	 */
-	VK_MMI_ERROR_MSG,
+	MMI_ERROR_MSG,
 	/*
 	 * Zyklischer Aufruf, bei Verwendung von blockierenden Aufrufen (alle 100ms).
 	 */
-	VK_MMI_CYCLIC_CALL,
+	MMI_CYCLIC_CALL,
 	/*
 	 * Meldet den Status in ulParam, wenn die Standard-Applikation vom MMI-Gateway
 	 * umgeschaltet wird.
 	 */
-	VK_MMI_DEFAPP_STATE,
+	MMI_DEFAPP_STATE,
 	/*
 	 * Meldet den Status in ulParam (Pointer auf CAN_TRANSFER_STATE_TR) der laufenden
 	 * CANopen SDO-Übertragung.
 	 */
-	VK_MMI_CAN_TRANSFER_STATE,
-	VK_MMI_CAN_TRANSFER_COMPLETE,
+	MMI_CAN_TRANSFER_STATE,
+	MMI_CAN_TRANSFER_COMPLETE,
 };
 
 enum class transfer_status_type
@@ -170,104 +165,116 @@ struct transfer_exception_error
 	static transfer_exception_error create(transfer_status_type);
 };
 
-typedef std::function<
-	void(
-	callback_type_type, // Aufruf-Typ
-	unsigned long, // ulParam = Zusatzparameter je nach Wert von ulType
-	context_pointer_type) // der bei ncrConnect übergebene Kontext
-> callback_function_type;
-
 struct control
 {
-	// Öffnen der Steuerung mit einem Namen
-	// Parameter: Name der Steuerung, Callback-Funktion
-	control(std::string const &name, callback_function_type const &callback);
-
 	// Öffnen der Standard-Steuerung
 	// Parameter: Callback-Funktion
-	control(callback_function_type const &callback);
+	//virtual open() = 0;
 
+	// Schließen und Beenden der Steuerung
 	virtual ~control();
 
 	// Zeiger auf Dual-Port-RAM der Steuerung
-	void *get_dpr_address();
+	//virtual void *get_dpr_address() = 0;
 
 	// Ermitteln, ob Steuerung die Firmware schon erhalten hat
-	bool get_init_state();
+	virtual bool get_init_state() = 0;
 
 	// Asynchrone Funktion, um die Firmware und das SPS-Programm in die Steuerung zu laden
 	// Parameter: Name der Konfigurationsdatei für Firmware-Download
-	transfer_type load_firmware(std::string const &config_name);
+	//virtual transfer_type load_firmware(std::string const &config_name) = 0;
 
 	// Synchrone Funktion, um die Firmware und das SPS-Programm in die Steuerung zu laden
 	// Parameter: Name der Konfigurationsdatei für Firmware-Download
-	void load_firmware_blocked(std::string const &config_name);
+	virtual void load_firmware_blocked(std::string const &config_name) = 0;
 
 	// Verbindungsaufbau zu einer bereits geladenen Steuerung für passive Applikationen, wie
 	// Busserver und CodeSys.
-	void connect();
+	//virtual void connect() = 0;
 
 	// Asynchrone Funktion, um Dateien, z.B. Maschinenkonstanten oder DIN-Programme in die
 	// Steuerung zu übertragen.
 	// Parameter: Dateiname, Header-String für Programmnummern bei DIN-Programmen, Steuerblock 1 für
 	// Blockübertragungen
-	transfer_type send_file(std::string const &name, std::string const &header, transfer_block_type type);
+	//virtual transfer_type send_file(std::string const &name, std::string const &header, transfer_block_type type) = 0;
 
 	// Erweiterte asynchrone Funktion, um vorwiegend Online-Programme, ab einem bestimmten Offset
 	// in die Steuerung zu übertragen.
 	// Parameter: Dateiname, Offset, Header-String, Steuerblock 1
-	transfer_type send_file_ex(std::string const &name, std::uint64_t offset, std::string const &header,
-	                           transfer_block_type type);
+	//virtual transfer_type send_file_ex(std::string const &name, std::uint64_t offset, std::string const &header,
+	//                                   transfer_block_type type) = 0;
 
 	// Synchrone Funktion, um Dateien, z.B. Maschinenkonstanten oder DIN-Programme in die
 	// Steuerung zu übertragen.
 	// Parameter: Dateiname, Header-String für Programmnummern bei DIN-Programmen, Steuerblock 1 für
 	// Blockübertragungen
-	void send_file_blocked(std::string const &name, std::string const &header,
-	                       transfer_block_type type);
+	virtual void send_file_blocked(std::string const &name, std::string const &header,
+	                               transfer_block_type type) = 0;
 
 	// Asynchrone Funktion, um Dateien, z.B. Maschinenkonstanten oder DIN-Programme von der
 	// Steuerung zu übertragen.
 	// Parameter: Dateiname, Steuerblock 1 für Blockübertragungen
-	transfer_type receive_file(std::string const &name, transfer_block_type type);
+	//virtual transfer_type receive_file(std::string const &name, transfer_block_type type) = 0;
 
 	// Synchrone Funktion, um Dateien, z.B. Maschinenkonstanten oder DIN-Programme von der
 	// Steuerung zu übertragen.
 	// Parameter: Dateiname, Steuerblock 1 für Blockübertragungen
-	void receive_file_blocked(std::string const &name, transfer_block_type type);
+	//virtual void receive_file_blocked(std::string const &name, transfer_block_type type) = 0;
 
 	// Synchrone Funktion, um Nachrichten an die Steuerung zu senden
 	// Parameter: Nachrichten-Struktur
-	void send_message(MSG_TR *message);
+	virtual void send_message(MSG_TR *message) = 0;
 
 	// Lese die Werte der angegebenen P-Feldindices aus dem Parameterfeld der Steuerung.
 	// Parameter: Parameters
-	void read_param_array(std::map<std::uint16_t, double> &parameters);
+	virtual void read_param_array(std::map<std::uint16_t, double> &parameters) = 0;
 
 	// Schreibe die angegebenen P-Feldwerte in das Parameterfeld der Steuerung.
 	// Parameter: Parameters
-	bool write_param_array(std::map<std::uint16_t, double> &parameters);
+	//virtual bool write_param_array(std::map<std::uint16_t, double> &parameters) = 0;
 
 	// Liest Echtzeit-Daten aus der Steuerung.
 	// Parameter: Liste von Ausdrücken, Auswertungen werden gespeichert, Fehlerinformation wird befüllt
-	bool evaluate_expression(std::vector<std::string> const &expressions, std::vector<double> &results,
-	                         expression_error_info &error_info);
+	//virtual bool evaluate_expression(std::vector<std::string> const &expressions, std::vector<double> &results,
+	//                                 expression_error_info &error_info) = 0;
 
-private:
-	struct impl;
-
-	impl *impl_;
+	// Callback für Steuerungs-Nachrichten
+	// Parameter: Aufruf-Typ, Zusatzparameter je nach Wert des Aufruf-Typs
+	virtual void handle_message(callback_type_type type, unsigned long param) = 0;
 };
 
 struct gateway
 {
 	// Zugriff auf Konfiguration des Gateways
 	// Parameter: Name des Gateways (derzeit nur ein leerer String unterstützt)
-	gateway(std::string const &name);
+	virtual gateway *open(std::string const &name) = 0;
 
 	// Anzahl der konfigurierten Verbindungen
 	// Parameter: Anzahl wird befüllt
-	std::int32_t get_num_of_conns(std::int32_t number);
+	virtual std::int32_t get_num_of_conns(std::int32_t number) = 0;
+};
+
+struct local_control
+	: control
+{
+	// Öffnen der Steuerung mit einem Namen
+	// Parameter: Name der Steuerung, Callback-Funktion
+	local_control(std::string const &name);
+
+	virtual ~local_control();
+
+	virtual bool get_init_state() override;
+	virtual void load_firmware_blocked(std::string const &config_name) override;
+	virtual void send_file_blocked(std::string const &name, std::string const &header,
+	                               transfer_block_type type) override;
+	virtual void send_message(MSG_TR *message) override;
+	virtual void read_param_array(std::map<std::uint16_t, double> &parameters) override;
+	//virtual bool write_param_array(std::map<std::uint16_t, double> &parameters) override;
+
+private:
+	struct local_impl;
+
+	local_impl *impl_;
 };
 
 }
