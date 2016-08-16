@@ -6,6 +6,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 
 // TODO
 #include "winsock2.h"
@@ -21,6 +22,8 @@ static bool g_run_server = true;
 static void sigint_handler(int signal_number);
 static void handle_message(wrap::message const &message);
 
+static std::unique_ptr<wrap::control> g_control;
+
 struct my_local_control
 	: wrap::local_control
 {
@@ -30,8 +33,9 @@ struct my_local_control
 	virtual void handle_message(wrap::callback_type_type type, unsigned long param) override;
 };
 
-int main(int argc, char **argv)
+int server_main(int argc, char **argv)
 {
+#ifdef WIN32
 	WORD wVersionRequested;
 	WSADATA wsaData;
 	int err;
@@ -46,6 +50,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "WSAStartup failed with error: %d\n", err);
 		return 1;
 	}
+#endif
 
 #if 0
 	try {
@@ -91,6 +96,7 @@ int main(int argc, char **argv)
 #if 1
 	try {
 		wrap::server server("10.0.0.138", 44455);
+		g_control.reset(new my_local_control("CNC1"));
 
 		std::signal(SIGINT, sigint_handler);
 
@@ -104,11 +110,15 @@ int main(int argc, char **argv)
 			}
 		}
 	} catch (std::exception const &exception) {
-		std::printf("Exception while running server.\n%s\n", exception.what());
+		std::fprintf(stderr, "Exception while running server.\n%s\n", exception.what());
+		WSACleanup();
+		return 1;
 	}
 #endif
 
 	WSACleanup();
+
+	return 0;
 }
 
 void sigint_handler(int signal_number)
@@ -129,6 +139,7 @@ void handle_message(wrap::message const &message)
 		size = ntohs(size);
 		std::string name(message.contents.data() + 2, message.contents.data() + 2 + size);
 		std::printf("open name: '%s'\n", name.c_str());
+
 	}
 }
 

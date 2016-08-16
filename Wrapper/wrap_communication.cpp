@@ -384,14 +384,15 @@ void server_impl::handle_client(client_data &client_data)
 
 	std::shared_ptr<message> message = message::from_bytes(client_data.buffer);
 
-	if (!message && client_data.buffer.size() >= READ_BUFFER_MAX) {
-		fprintf(stderr, "No messages received yet from client <%s> after <%d> bytes.\nForcing disconnect.\n", client_data.address_string.c_str(), READ_BUFFER_MAX);
-		close_socket(client_data.socket);
-		remove_client(client_data);
+	if (!message) {
+		if (client_data.buffer.size() >= READ_BUFFER_MAX) {
+			fprintf(stderr, "No messages received yet from client <%s> after <%d> bytes.\nForcing disconnect.\n", client_data.address_string.c_str(), READ_BUFFER_MAX);
+			close_socket(client_data.socket);
+			remove_client(client_data);
+		}
+
 		return;
 	}
-
-	client_data.buffer.erase(client_data.buffer.begin(), client_data.buffer.begin() + message->size);
 
 	if (callback) {
 		callback(*message);
@@ -639,7 +640,7 @@ message client::send_message(message const &message, int timeout_ms)
 	}
 
 	if (result == 0) {
-		throw timeout_exception("Error during fetching message response.");
+		throw timeout_exception("Error fetching message response.");
 	}
 
 	if (impl_->pollfd.revents & POLLIN) {

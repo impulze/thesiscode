@@ -265,109 +265,6 @@ void local_control::read_param_array(std::map<std::uint16_t, double> &parameters
 		++value_it;
 	}
 }
-
-local_control::local_control(std::string const &name)
-{
-	if (!g_dll_loaded) {
-		load_cnc_dlls();
-		g_dll_loaded = true;
-	}
-
-	HANDLE handle = ncrOpenControl_p(name.c_str(), ::callback, this);
-
-	if (handle == INVALID_HANDLE_VALUE) {
-		throw error::create_error();
-	}
-
-	impl_ = new local_impl();
-	impl_->handle = handle;
-
-	try {
-		g_control_mapping[this] = this;
-	}
-	catch (...) {
-		delete impl_;
-		throw;
-	}
-}
-
-local_control::~local_control()
-{
-	ncrCloseControl_p(impl_->handle);
-
-	delete impl_;
-}
-
-bool local_control::get_init_state()
-{
-	return ncrGetInitState_p(impl_->handle) == 1;
-}
-
-void local_control::load_firmware_blocked(std::string const &config_name)
-{
-	const LONG result = ncrLoadFirmwareBlocked_p(impl_->handle, config_name.c_str());
-
-	if (result == 0) {
-		return;
-	} else if (result == -1) {
-		return;
-	}
-
-	throw error::create_error();
-}
-
-void local_control::send_file_blocked(std::string const &name, std::string const &header,
-                                transfer_block_type type)
-{
-	const LONG long_type = block_type_conversion(type);
-	const LONG result = ncrSendFileBlocked_p(impl_->handle, name.c_str(), header.c_str(), long_type);
-
-	throw_transfer_exception(result);
-}
-
-void local_control::send_message(MSG_TR *message)
-{
-	const BOOL result = ncrSendMessage_p(impl_->handle, message);
-
-	if (result == TRUE) {
-		return;
-	}
-
-	throw error::create_error();
-}
-
-void local_control::read_param_array(std::map<std::uint16_t, double> &parameters)
-{
-	if (parameters.size() > 0xFFFF) {
-		throw std::runtime_error("Only 16-bit size allowed for read_param_array.");
-	}
-
-	std::vector<std::uint16_t> indices;
-	std::vector<double> values;
-
-	indices.reserve(parameters.size());
-	values.reserve(parameters.size());
-
-	for (auto const &parameter : parameters) {
-		indices.push_back(parameter.first);
-		values.push_back(parameter.second);
-	}
-
-	const BOOL result = ncrReadParamArray_p(impl_->handle, indices.data(), values.data(), static_cast<WORD>(parameters.size()));
-
-	if (result != TRUE) {
-		throw error::create_error();
-	}
-
-	std::vector<double>::const_iterator value_it = values.begin();
-	std::map<std::uint16_t, double>::iterator parameters_it = parameters.begin();
-
-	while (value_it != values.end()) {
-		parameters_it->second = *value_it;
-		++parameters_it;
-		++value_it;
-	}
-}
 #endif
 
 remote_control::remote_control(std::string const &name, std::string const &address, std::uint16_t port)
@@ -385,12 +282,12 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 		wrap::message message(wrap::message_type::CTRL_OPEN);
 
 		{
-			if (name.size() > std::numeric_limits<std::uint16_t>::max()) {
+			if (name.size() + 2 > (std::numeric_limits<std::uint16_t>::max)()) {
 				throw std::runtime_error("Name too long.");
 			}
 
 			// size of name (2 byte) + name
-			message.size += 2 + name.size();
+			message.size += static_cast<std::uint16_t>(2 + name.size());
 			message.contents.resize(2 + name.size());
 			const std::uint16_t size = htons(static_cast<std::uint16_t>(name.size()));
 			std::memcpy(message.contents.data(), &size, 2);

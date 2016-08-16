@@ -2,6 +2,10 @@
 #include "wrap_mmictrl.h"
 #include "wrap_protocol.h"
 
+#ifdef WIN32
+#include <winsock2.h>
+#endif
+
 #if 0
 #include <csignal>
 #include <cstdio>
@@ -75,9 +79,39 @@ struct my_remote_control
 	void handle_message(wrap::callback_type_type type, unsigned long parameter) override;
 };
 
-int main(int argc, char **argv)
+int client_main(int argc, char **argv)
 {
-	my_remote_control ctrl("CNC1", "10.0.0.138", 44455);
+#ifdef WIN32
+	WORD wVersionRequested;
+	WSADATA wsaData;
+	int err;
+
+	/* Use the MAKEWORD(lowbyte, highbyte) macro declared in Windef.h */
+	wVersionRequested = MAKEWORD(2, 2);
+
+	err = WSAStartup(wVersionRequested, &wsaData);
+	if (err != 0) {
+		/* Tell the user that we could not find a usable */
+		/* Winsock DLL.                                  */
+		fprintf(stderr, "WSAStartup failed with error: %d\n", err);
+		return 1;
+	}
+#endif
+
+	try {
+		my_remote_control ctrl("CNC1", "10.0.0.138", 44455);
+	} catch (std::exception const &exception) {
+		std::fprintf(stderr, "Exception while running server.\n%s\n", exception.what());
+#ifdef WIN32
+		WSACleanup();
+#endif
+		return 1;
+	}
+
+#ifdef WIN32
+	WSACleanup();
+#endif
+	return 0;
 }
 
 template <class... T>

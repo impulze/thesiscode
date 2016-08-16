@@ -36,7 +36,7 @@ struct message
 	message(message_type type);
 
 	void to_bytes(std::vector<std::uint8_t> &bytes) const;
-	static std::shared_ptr<message> from_bytes(std::vector<uint8_t> const &bytes);
+	static std::shared_ptr<message> from_bytes(std::vector<uint8_t> &bytes);
 
 	const std::uint8_t version;
 	const message_type type;
