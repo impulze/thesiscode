@@ -1,6 +1,8 @@
 #include "wrap_communication.h"
+#include "wrap_mmictrl.h"
 #include "wrap_protocol.h"
 
+#if 0
 #include <csignal>
 #include <cstdio>
 #include <cstring>
@@ -60,4 +62,31 @@ int main(int argc, char **argv)
 		server.run_one(2000);
 	}
 #endif
+}
+
+#endif
+
+struct my_remote_control
+	: wrap::remote_control
+{
+	template <class... T>
+	my_remote_control(T &&... args);
+
+	void handle_message(wrap::callback_type_type type, unsigned long parameter) override;
+};
+
+int main(int argc, char **argv)
+{
+	my_remote_control ctrl("CNC1", "10.0.0.138", 44455);
+}
+
+template <class... T>
+my_remote_control::my_remote_control(T &&... args)
+	: wrap::remote_control(std::forward<T>(args)...)
+{
+}
+
+void my_remote_control::handle_message(wrap::callback_type_type type, unsigned long parameter)
+{
+	std::printf("new message: %d %lu\n", static_cast<int>(type), parameter);
 }

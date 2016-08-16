@@ -1,14 +1,20 @@
+#include "wrap_communication.h"
 #include "wrap_mmictrl.h"
+#include "wrap_protocol.h"
 
 #include <cassert>
 #include <codecvt>
 #include <cstdio>
-#include <stdexcept>
+#include <cstring>
+#include <limits>
 #include <locale>
 #include <map>
+#include <memory>
 #include <sstream>
+#include <stdexcept>
 
-#include "windows.h"
+#ifdef WIN32
+#include <windows.h>
 
 #include "com_1st.h"
 #define MMI
@@ -16,6 +22,17 @@
 #define _export
 #include "mmictrl.h"
 #include "com_sbx.h"
+
+#define MAKE_FUN_PTR_AND_VAR(name, ret, ...) \
+typedef ret (WINAPI * name ## _fun_ptr)(##__VA_ARGS__); \
+name ## _fun_ptr name ## _p;
+
+#define LOAD_FUN(name, module) \
+name ## _p = reinterpret_cast<name ## _fun_ptr>(GetProcAddress(module, #name));
+
+#else
+#include <arpa/inet.h> // hto* functions
+#endif
 
 #define MMIDBG(...) \
 do {\
@@ -27,13 +44,7 @@ do {\
 	std::fflush(stdout); \
 } while(0);
 
-#define MAKE_FUN_PTR_AND_VAR(name, ret, ...) \
-typedef ret (WINAPI * name ## _fun_ptr)(##__VA_ARGS__); \
-name ## _fun_ptr name ## _p;
-
-#define LOAD_FUN(name, module) \
-name ## _p = reinterpret_cast<name ## _fun_ptr>(GetProcAddress(module, #name));
-
+#ifdef WIN32
 MAKE_FUN_PTR_AND_VAR(ncrOpenControl, HANDLE, LPCSTR, MSGCALLBACK, LPVOID)
 MAKE_FUN_PTR_AND_VAR(ncrOpenDefaultControl, HANDLE, MSGCALLBACK, LPVOID)
 MAKE_FUN_PTR_AND_VAR(ncrGetInitState, LONG, HANDLE)
@@ -52,13 +63,22 @@ static std::string error_string_from_win32_error(DWORD win32_error);
 static void throw_transfer_exception(LONG result);
 static LONG block_type_conversion(wrap::transfer_block_type type);
 static wrap::callback_type_type conversion_callback_type_type(LONG type);
+#endif
 
 namespace wrap
 {
 
+#ifdef WIN32
 struct local_control::local_impl
 {
 	HANDLE handle;
+};
+#endif
+
+struct remote_control::remote_impl
+{
+	std::uint32_t id;
+	std::shared_ptr<wrap::client> client;
 };
 
 }
@@ -72,6 +92,7 @@ error::error(std::string const &message, std::uint32_t win32_error)
 {
 }
 
+#ifdef WIN32
 error error::create_error()
 {
 	const DWORD win32_error = GetLastError();
@@ -79,6 +100,7 @@ error error::create_error()
 
 	return error(error_string, win32_error);
 }
+#endif
 
 transfer_exception::transfer_exception(std::string const &message, transfer_status_type type)
 	: std::runtime_error(message),
@@ -111,6 +133,7 @@ transfer_exception_error::transfer_exception_error(std::string const &message, t
 {
 }
 
+#ifdef WIN32
 transfer_exception_error transfer_exception_error::create(transfer_status_type type)
 {
 	const DWORD win32_error = GetLastError();
@@ -123,16 +146,123 @@ transfer_exception_error transfer_exception_error::create(transfer_status_type t
 
 	return transfer_exception_error(strm.str(), type, win32_error);
 }
+#endif
 
 control::~control()
 {
+}
+
+#ifdef WIN32
+local_control::local_control(std::string const &name)
+{
+	if (!g_dll_loaded) {
+		load_cnc_dlls();
+		g_dll_loaded = true;
+	}
+
+	HANDLE handle = ncrOpenControl_p(name.c_str(), ::callback, this);
+
+	if (handle == INVALID_HANDLE_VALUE) {
+		throw error::create_error();
+	}
+
+	impl_ = new local_impl();
+	impl_->handle = handle;
+
+	try {
+		g_control_mapping[this] = this;
+	}
+	catch (...) {
+		delete impl_;
+		throw;
+	}
+}
+
+local_control::~local_control()
+{
+	ncrCloseControl_p(impl_->handle);
+
+	delete impl_;
+
 	for (std::map<LPVOID, control *>::iterator it = g_control_mapping.begin(); it != g_control_mapping.end();) {
 		if (it->first == this) {
 			it = g_control_mapping.erase(it);
+			return;
 		}
 		else {
 			++it;
 		}
+	}
+}
+
+bool local_control::get_init_state()
+{
+	return ncrGetInitState_p(impl_->handle) == 1;
+}
+
+void local_control::load_firmware_blocked(std::string const &config_name)
+{
+	const LONG result = ncrLoadFirmwareBlocked_p(impl_->handle, config_name.c_str());
+
+	if (result == 0) {
+		return;
+	} else if (result == -1) {
+		return;
+	}
+
+	throw error::create_error();
+}
+
+void local_control::send_file_blocked(std::string const &name, std::string const &header,
+                                transfer_block_type type)
+{
+	const LONG long_type = block_type_conversion(type);
+	const LONG result = ncrSendFileBlocked_p(impl_->handle, name.c_str(), header.c_str(), long_type);
+
+	throw_transfer_exception(result);
+}
+
+void local_control::send_message(MSG_TR *message)
+{
+	const BOOL result = ncrSendMessage_p(impl_->handle, message);
+
+	if (result == TRUE) {
+		return;
+	}
+
+	throw error::create_error();
+}
+
+void local_control::read_param_array(std::map<std::uint16_t, double> &parameters)
+{
+	if (parameters.size() > 0xFFFF) {
+		throw std::runtime_error("Only 16-bit size allowed for read_param_array.");
+	}
+
+	std::vector<std::uint16_t> indices;
+	std::vector<double> values;
+
+	indices.reserve(parameters.size());
+	values.reserve(parameters.size());
+
+	for (auto const &parameter : parameters) {
+		indices.push_back(parameter.first);
+		values.push_back(parameter.second);
+	}
+
+	const BOOL result = ncrReadParamArray_p(impl_->handle, indices.data(), values.data(), static_cast<WORD>(parameters.size()));
+
+	if (result != TRUE) {
+		throw error::create_error();
+	}
+
+	std::vector<double>::const_iterator value_it = values.begin();
+	std::map<std::uint16_t, double>::iterator parameters_it = parameters.begin();
+
+	while (value_it != values.end()) {
+		parameters_it->second = *value_it;
+		++parameters_it;
+		++value_it;
 	}
 }
 
@@ -238,9 +368,136 @@ void local_control::read_param_array(std::map<std::uint16_t, double> &parameters
 		++value_it;
 	}
 }
+#endif
+
+remote_control::remote_control(std::string const &name, std::string const &address, std::uint16_t port)
+{
+	impl_ = new remote_impl;
+
+	try {
+		impl_->client.reset(new wrap::client(address, port));
+	} catch (...) {
+		delete impl_;
+		throw;
+	}
+
+	try {
+		std::vector<std::uint8_t> message_contents;
+
+		{
+			if (name.size() > std::numeric_limits<std::uint16_t>::max()) {
+				throw std::runtime_error("Name too long.");
+			}
+
+			// size of name (2 byte) + name
+			message_contents.reserve(2 + name.size());
+			const std::uint16_t size = htons(static_cast<std::uint16_t>(name.size()));
+			std::memcpy(message_contents.data(), &size, 2);
+			std::memcpy(message_contents.data() + 2, name.c_str(), size);
+		}
+
+		wrap::message message = create_message(wrap::message_type::CTRL_OPEN, message_contents);
+
+		impl_->client->send_message(message, 1000);
+	} catch (...) {
+		delete impl_;
+		throw;
+	}
+}
+
+remote_control::~remote_control()
+{
+	//ncrCloseControl_p(impl_->handle);
+
+	delete impl_;
+}
+
+bool remote_control::get_init_state()
+{
+	//return ncrGetInitState_p(impl_->handle) == 1;
+	return false;
+}
+
+void remote_control::load_firmware_blocked(std::string const &config_name)
+{
+/*
+	const LONG result = ncrLoadFirmwareBlocked_p(impl_->handle, config_name.c_str());
+
+	if (result == 0) {
+		return;
+	} else if (result == -1) {
+		return;
+	}
+	throw error::create_error();
+*/
+	throw;
+}
+
+void remote_control::send_file_blocked(std::string const &name, std::string const &header,
+                                       transfer_block_type type)
+{
+/*
+	const LONG long_type = block_type_conversion(type);
+	const LONG result = ncrSendFileBlocked_p(impl_->handle, name.c_str(), header.c_str(), long_type);
+
+	throw_transfer_exception(result);
+*/
+	throw;
+}
+
+void remote_control::send_message(MSG_TR *message)
+{
+/*
+	const BOOL result = ncrSendMessage_p(impl_->handle, message);
+
+	if (result == TRUE) {
+		return;
+	}
+
+	throw error::create_error();
+*/
+	throw;
+}
+
+void remote_control::read_param_array(std::map<std::uint16_t, double> &parameters)
+{
+	if (parameters.size() > 0xFFFF) {
+		throw std::runtime_error("Only 16-bit size allowed for read_param_array.");
+	}
+
+/*
+	std::vector<std::uint16_t> indices;
+	std::vector<double> values;
+
+	indices.reserve(parameters.size());
+	values.reserve(parameters.size());
+
+	for (auto const &parameter : parameters) {
+		indices.push_back(parameter.first);
+		values.push_back(parameter.second);
+	}
+
+	const BOOL result = ncrReadParamArray_p(impl_->handle, indices.data(), values.data(), static_cast<WORD>(parameters.size()));
+
+	if (result != TRUE) {
+		throw error::create_error();
+	}
+
+	std::vector<double>::const_iterator value_it = values.begin();
+	std::map<std::uint16_t, double>::iterator parameters_it = parameters.begin();
+
+	while (value_it != values.end()) {
+		parameters_it->second = *value_it;
+		++parameters_it;
+		++value_it;
+	}
+*/
+	throw;
+}
 
 }
 
+#ifdef WIN32
 void WINAPI callback(ULONG type, ULONG param, LPVOID context)
 {
 	for (auto &entry : g_control_mapping) {
@@ -397,3 +654,5 @@ wrap::callback_type_type conversion_callback_type_type(LONG type)
 
 	throw std::runtime_error("Assertion.");
 }
+
+#endif

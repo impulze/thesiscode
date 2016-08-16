@@ -18,9 +18,11 @@ namespace wrap
 struct error
 	: virtual std::runtime_error
 {
-	error(std::string const &message,  std::uint32_t win32_error);
+	error(std::string const &message, std::uint32_t win32_error);
 
+#ifdef WIN32
 	static error create_error();
+#endif
 
 	const std::uint32_t win32_error;
 };
@@ -162,7 +164,9 @@ struct transfer_exception_error
 {
 	transfer_exception_error(std::string const &message, transfer_status_type type, std::uint32_t win32_error);
 
+#ifdef WIN32
 	static transfer_exception_error create(transfer_status_type);
+#endif
 };
 
 struct control
@@ -254,6 +258,7 @@ struct gateway
 	virtual std::int32_t get_num_of_conns(std::int32_t number) = 0;
 };
 
+#ifdef WIN32
 struct local_control
 	: control
 {
@@ -275,6 +280,30 @@ private:
 	struct local_impl;
 
 	local_impl *impl_;
+};
+#endif
+
+struct remote_control
+	: control
+{
+	// Öffnen der Steuerung mit einem Namen
+	// Parameter: Name der Steuerung, Callback-Funktion
+	remote_control(std::string const &name, std::string const &address, std::uint16_t port);
+
+	virtual ~remote_control();
+
+	virtual bool get_init_state() override;
+	virtual void load_firmware_blocked(std::string const &config_name) override;
+	virtual void send_file_blocked(std::string const &name, std::string const &header,
+	                               transfer_block_type type) override;
+	virtual void send_message(MSG_TR *message) override;
+	virtual void read_param_array(std::map<std::uint16_t, double> &parameters) override;
+	//virtual bool write_param_array(std::map<std::uint16_t, double> &parameters) override;
+
+private:
+	struct remote_impl;
+
+	remote_impl *impl_;
 };
 
 }
