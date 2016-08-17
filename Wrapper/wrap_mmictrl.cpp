@@ -272,6 +272,7 @@ void local_control::read_param_array(std::map<std::uint16_t, double> &parameters
 remote_control::remote_control(std::string const &name, std::string const &address, std::uint16_t port)
 {
 	impl_ = new remote_impl;
+	impl_->name = name;
 
 	try {
 		impl_->client.reset(new wrap::client(address, port));

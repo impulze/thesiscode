@@ -864,7 +864,7 @@ message client::send_message(message const &message, int timeout_ms)
 			} else if (!response) {
 				throw std::runtime_error("Requesting server data for message response resulted in invalid message.");
 			} else {
-				printf("buffer should be empty: %d\n", impl_->data.buffer.size());
+				return *response;
 			}
 		} else if (impl_->data.pollfd.revents & (POLLHUP|POLLERR|POLLNVAL)) {
 			throw std::runtime_error("Unexpected polling state for client descriptor.");
