@@ -107,7 +107,7 @@ error error::create_error()
 
 transfer_exception::transfer_exception(std::string const &message, transfer_status_type type)
 	: std::runtime_error(message),
-      type(type)
+	  type(type)
 {
 }
 
@@ -199,7 +199,13 @@ local_control::~local_control()
 
 bool local_control::get_init_state()
 {
-	return ncrGetInitState_p(impl_->handle) == 1;
+	const LONG result = ncrGetInitState_p(impl_->handle);
+
+	if (result == -1) {
+		throw std::runtime_error("Getting init state failed.");
+	}
+
+	return result == 1;
 }
 
 void local_control::load_firmware_blocked(std::string const &config_name)
@@ -218,8 +224,8 @@ void local_control::load_firmware_blocked(std::string const &config_name)
 void local_control::send_file_blocked(std::string const &name, std::string const &header,
                                 transfer_block_type type)
 {
-	const LONG long_type = block_type_conversion(type);
-	const LONG result = ncrSendFileBlocked_p(impl_->handle, name.c_str(), header.c_str(), long_type);
+	const LONG cnv_type = block_type_conversion(type);
+	const LONG result = ncrSendFileBlocked_p(impl_->handle, name.c_str(), header.c_str(), cnv_type);
 
 	throw_transfer_exception(result);
 }
@@ -327,35 +333,68 @@ remote_control::~remote_control()
 
 bool remote_control::get_init_state()
 {
-	//return ncrGetInitState_p(impl_->handle) == 1;
-	return false;
+	wrap::message message(wrap::message_type::CTRL_GET_INIT);
+	wrap::message response = impl_->client->send_message(message, 1000);
+
+	check_server_error(*(impl_->client), response);
+	check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_GET_INIT_RESPONSE);
+
+	if (response.contents[0] == 0) {
+		const bool state = (response.extract_bit8(0) == 1);
+		return state;
+	}
+
+	const std::string error_string = message.extract_string(1);
+	char exception_string[1024];
+	std::snprintf(exception_string, sizeof exception_string, "CNC Getting state for <%s> failed.\n%s\n", impl_->name.c_str(), error_string.c_str());
+	throw std::runtime_error(exception_string);
 }
 
 void remote_control::load_firmware_blocked(std::string const &config_name)
 {
-/*
-	const LONG result = ncrLoadFirmwareBlocked_p(impl_->handle, config_name.c_str());
+	wrap::message message(wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED);
+	message.append(config_name);
+	wrap::message response = impl_->client->send_message(message, 20000);
 
-	if (result == 0) {
-		return;
-	} else if (result == -1) {
+	check_server_error(*(impl_->client), response);
+	check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED_RESPONSE);
+
+	if (response.contents[0] == 0) {
+		// response.contents[1] = 8bit: 1 = already loaded, 0 = newly loaded
 		return;
 	}
-	throw error::create_error();
-*/
-	throw;
+
+	const std::string error_string = message.extract_string(1);
+	const std::uint32_t win32_error = message.extract_bit32(1 + 2 + error_string.size());
+
+	throw error(error_string, win32_error);
 }
 
 void remote_control::send_file_blocked(std::string const &name, std::string const &header,
                                        transfer_block_type type)
 {
-/*
-	const LONG long_type = block_type_conversion(type);
-	const LONG result = ncrSendFileBlocked_p(impl_->handle, name.c_str(), header.c_str(), long_type);
+	wrap::message message(wrap::message_type::CTRL_SEND_FILE_BLOCKED);
+	message.append(name);
+	message.append(header);
+	message.append(static_cast<std::uint8_t>(type));
+	wrap::message response = impl_->client->send_message(message, 20000);
 
-	throw_transfer_exception(result);
-*/
-	throw;
+	check_server_error(*(impl_->client), response);
+	check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE);
+
+	if (response.contents[0] == 0) {
+		return;
+	}
+
+	wrap::transfer_status_type status = static_cast<wrap::transfer_status_type>(message.extract_bit8(1));
+	const std::string error_string = message.extract_string(2);
+	const std::uint32_t win32_error = message.extract_bit32(2 + 2 + error_string.size());
+
+	if (status == wrap::transfer_status_type::FAIL) {
+		throw transfer_exception_error(error_string, status, win32_error);
+	} else {
+		throw transfer_exception(error_string, status);
+	}
 }
 
 void remote_control::send_message(MSG_TR *message)
@@ -461,7 +500,7 @@ void throw_transfer_exception(LONG result)
 	}
 }
 
-LONG block_type_conversion(wrap::transfer_block_type type)
+std::uint32_t block_type_conversion(wrap::transfer_block_type type)
 {
 	switch (type) {
 		case wrap::transfer_block_type::NC_PROGRAMM:
