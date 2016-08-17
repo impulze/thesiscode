@@ -234,7 +234,18 @@ bool valid_message_type(std::uint16_t check_type)
 			return true;
 		case wrap::message_type::CTRL_CLOSE_RESPONSE:
 			return true;
-
+		case wrap::message_type::CTRL_GET_INIT:
+			return true;
+		case wrap::message_type::CTRL_GET_INIT_RESPONSE:
+			return true;
+		case wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED:
+			return true;
+		case wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED_RESPONSE:
+			return true;
+		case wrap::message_type::CTRL_SEND_FILE_BLOCKED:
+			return true;
+		case wrap::message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE:
+			return true;
 	}
 
 	return false;

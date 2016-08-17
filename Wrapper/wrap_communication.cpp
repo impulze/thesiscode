@@ -522,7 +522,7 @@ void client_data::send_response(wrap::message const &message)
 				response->append(static_cast<std::uint8_t>(type));
 				response->append(exception.what());
 				break;
-				}
+			}
 
 			response->append(static_cast<std::uint8_t>(0));
 			break;
@@ -659,9 +659,10 @@ void server_impl::handle_client(client_data &client_data)
 			// needs more data
 			break;
 		} else if (!message) {
-			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "Client <%s> send invalid message data. Client will be removed.\n", client_data.address_string.c_str());
-			throw std::runtime_error(exception_string);
+			std::fprintf(stderr, "Client <%s> send invalid message data. Client will be removed.\n", client_data.address_string.c_str());
+			close_socket(client_data.socket);
+			remove_client(client_data);
+			return;
 		} else {
 			if (callback) {
 				callback(*message);

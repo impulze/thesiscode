@@ -39,7 +39,7 @@ struct expression_error_info
 	std::size_t index; // Index der fehlerhaften Stelle
 };
 
-enum init_status
+enum class init_status
 {
 	FIRMWARE_LOADED,
 	FIRMWARE_ALREADY_LOADED
