@@ -298,7 +298,7 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 		if (response.contents[0] == 0) {
 			std::printf("[STATUS] CNC Connection to <%s> successful.\n", name.c_str());
 		} else {
-			const std::string error_string = message.extract_string(1);
+			const std::string error_string = response.extract_string(1);
 			char exception_string[1024];
 			std::snprintf(exception_string, sizeof exception_string, "CNC Connection to <%s> failed.\n%s\n", name.c_str(), error_string.c_str());
 			throw std::runtime_error(exception_string);
@@ -321,7 +321,7 @@ remote_control::~remote_control()
 		if (response.contents[0] == 0) {
 			std::printf("[STATUS] CNC Connection to <%s> closed.\n", impl_->name.c_str());
 		} else {
-			const std::string error_string = message.extract_string(1);
+			const std::string error_string = response.extract_string(1);
 			std::fprintf(stderr, "CNC Closing connection for <%s> failed.\n%s\n", impl_->name.c_str(), error_string.c_str());
 		}
 
@@ -340,11 +340,11 @@ bool remote_control::get_init_state()
 	check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_GET_INIT_RESPONSE);
 
 	if (response.contents[0] == 0) {
-		const bool state = (response.extract_bit8(0) == 1);
+		const bool state = (response.extract_bit8(1) == 1);
 		return state;
 	}
 
-	const std::string error_string = message.extract_string(1);
+	const std::string error_string = response.extract_string(1);
 	char exception_string[1024];
 	std::snprintf(exception_string, sizeof exception_string, "CNC Getting state for <%s> failed.\n%s\n", impl_->name.c_str(), error_string.c_str());
 	throw std::runtime_error(exception_string);
@@ -363,8 +363,8 @@ init_status remote_control::load_firmware_blocked(std::string const &config_name
 		return static_cast<init_status>(response.extract_bit8(1));
 	}
 
-	const std::string error_string = message.extract_string(1);
-	const std::uint32_t win32_error = message.extract_bit32(static_cast<std::uint16_t>(1 + 2 + error_string.size()));
+	const std::string error_string = response.extract_string(1);
+	const std::uint32_t win32_error = response.extract_bit32(static_cast<std::uint16_t>(1 + 2 + error_string.size()));
 
 	throw error(error_string, win32_error);
 }
@@ -385,11 +385,11 @@ void remote_control::send_file_blocked(std::string const &name, std::string cons
 		return;
 	}
 
-	wrap::transfer_status_type status = static_cast<wrap::transfer_status_type>(message.extract_bit8(1));
-	const std::string error_string = message.extract_string(2);
+	wrap::transfer_status_type status = static_cast<wrap::transfer_status_type>(response.extract_bit8(1));
+	const std::string error_string = response.extract_string(2);
 
 	if (status == wrap::transfer_status_type::FAIL) {
-		const std::uint32_t win32_error = message.extract_bit32(static_cast<std::uint16_t>(2 + 2 + error_string.size()));
+		const std::uint32_t win32_error = response.extract_bit32(static_cast<std::uint16_t>(2 + 2 + error_string.size()));
 		throw transfer_exception_error(error_string, status, win32_error);
 	} else {
 		throw transfer_exception(error_string, status);

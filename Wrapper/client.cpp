@@ -73,7 +73,7 @@ int client_main(int argc, char **argv)
 		printf("firmware update\n");
 		ctrl.load_firmware_blocked("C:\\Eckelmann\\StdHMI\\log\\download.cfg");
 		printf("send file\n");
-		ctrl.send_file_blocked("C:\\Eckelmann\\StdHMI\\log\\vom_mc.mk", "", wrap::transfer_block_type::MASCHINENKONSTANTEN);
+		ctrl.send_file_blocked("C:\\Eckelmann\\StdHMI\\log\\vom_nc.mk", "", wrap::transfer_block_type::MASCHINENKONSTANTEN);
 		printf("done\n");
 	} catch (std::exception const &exception) {
 		std::fprintf(stderr, "Exception while running client.\n%s\n", exception.what());

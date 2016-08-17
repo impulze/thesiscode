@@ -184,7 +184,7 @@ std::string message::extract_string(std::uint16_t position) const
 
 std::uint8_t message::extract_bit8(std::uint16_t position) const
 {
-	if ((contents.size() >= 1 && contents.size() - 1 > position) || contents.size() < 1) {
+	if ((contents.size() >= 1 && contents.size() - 1 < position) || contents.size() < 1) {
 		throw std::runtime_error("Message cannot extract byte at this position.");
 	}
 
@@ -193,7 +193,7 @@ std::uint8_t message::extract_bit8(std::uint16_t position) const
 
 std::uint16_t message::extract_bit16(std::uint16_t position) const
 {
-	if ((contents.size() >= 2 && contents.size() - 2 > position) || contents.size() < 2) {
+	if ((contents.size() >= 2 && contents.size() - 2 < position) || contents.size() < 2) {
 		throw std::runtime_error("Message cannot extract word at this position.");
 	}
 
@@ -206,7 +206,7 @@ std::uint16_t message::extract_bit16(std::uint16_t position) const
 
 std::uint32_t message::extract_bit32(std::uint16_t position) const
 {
-	if ((contents.size() >= 4 && contents.size() - 2 > position) || contents.size() < 4) {
+	if ((contents.size() >= 4 && contents.size() - 2 < position) || contents.size() < 4) {
 		throw std::runtime_error("Message cannot extract double word at this position.");
 	}
 
