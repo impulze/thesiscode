@@ -208,14 +208,14 @@ bool local_control::get_init_state()
 	return result == 1;
 }
 
-void local_control::load_firmware_blocked(std::string const &config_name)
+init_status local_control::load_firmware_blocked(std::string const &config_name)
 {
 	const LONG result = ncrLoadFirmwareBlocked_p(impl_->handle, config_name.c_str());
 
 	if (result == 0) {
-		return;
+		return init_status::FIRMWARE_LOADED;
 	} else if (result == -1) {
-		return;
+		return init_status::FIRMWARE_ALREADY_LOADED;
 	}
 
 	throw error::create_error();
@@ -350,7 +350,7 @@ bool remote_control::get_init_state()
 	throw std::runtime_error(exception_string);
 }
 
-void remote_control::load_firmware_blocked(std::string const &config_name)
+init_status remote_control::load_firmware_blocked(std::string const &config_name)
 {
 	wrap::message message(wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED);
 	message.append(config_name);
@@ -360,8 +360,7 @@ void remote_control::load_firmware_blocked(std::string const &config_name)
 	check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED_RESPONSE);
 
 	if (response.contents[0] == 0) {
-		// response.contents[1] = 8bit: 1 = already loaded, 0 = newly loaded
-		return;
+		return static_cast<init_status>(response.extract_bit8(1));
 	}
 
 	const std::string error_string = message.extract_string(1);

@@ -39,6 +39,12 @@ struct expression_error_info
 	std::size_t index; // Index der fehlerhaften Stelle
 };
 
+enum init_status
+{
+	FIRMWARE_LOADED,
+	FIRMWARE_ALREADY_LOADED
+};
+
 struct can_object_desc_tr_type
 {
 	std::shared_ptr<can_object_desc_tr_type> next; // Pointer to next description
@@ -190,7 +196,7 @@ struct control
 
 	// Synchrone Funktion, um die Firmware und das SPS-Programm in die Steuerung zu laden
 	// Parameter: Name der Konfigurationsdatei für Firmware-Download
-	virtual void load_firmware_blocked(std::string const &config_name) = 0;
+	virtual init_status load_firmware_blocked(std::string const &config_name) = 0;
 
 	// Verbindungsaufbau zu einer bereits geladenen Steuerung für passive Applikationen, wie
 	// Busserver und CodeSys.
@@ -269,7 +275,7 @@ struct local_control
 	virtual ~local_control();
 
 	virtual bool get_init_state() override;
-	virtual void load_firmware_blocked(std::string const &config_name) override;
+	virtual init_status load_firmware_blocked(std::string const &config_name) override;
 	virtual void send_file_blocked(std::string const &name, std::string const &header,
 	                               transfer_block_type type) override;
 	virtual void send_message(MSG_TR *message) override;
@@ -293,7 +299,7 @@ struct remote_control
 	virtual ~remote_control();
 
 	virtual bool get_init_state() override;
-	virtual void load_firmware_blocked(std::string const &config_name) override;
+	virtual init_status load_firmware_blocked(std::string const &config_name) override;
 	virtual void send_file_blocked(std::string const &name, std::string const &header,
 	                               transfer_block_type type) override;
 	virtual void send_message(MSG_TR *message) override;
