@@ -387,9 +387,9 @@ void remote_control::send_file_blocked(std::string const &name, std::string cons
 
 	wrap::transfer_status_type status = static_cast<wrap::transfer_status_type>(message.extract_bit8(1));
 	const std::string error_string = message.extract_string(2);
-	const std::uint32_t win32_error = message.extract_bit32(2 + 2 + error_string.size());
 
 	if (status == wrap::transfer_status_type::FAIL) {
+		const std::uint32_t win32_error = message.extract_bit32(2 + 2 + error_string.size());
 		throw transfer_exception_error(error_string, status, win32_error);
 	} else {
 		throw transfer_exception(error_string, status);

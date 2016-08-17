@@ -69,6 +69,12 @@ int client_main(int argc, char **argv)
 
 	try {
 		my_remote_control ctrl("CNC1", "10.0.0.138", 44455);
+		printf("init state: %d\n", ctrl.get_init_state());
+		printf("firmware update\n");
+		ctrl.load_firmware_blocked("C:\\Eckelmann\\StdHMI\\log\\download.cfg");
+		printf("send file\n");
+		ctrl.send_file_blocked("C:\\Eckelmann\\StdHMI\\log\\vom_mc.mk", "", wrap::transfer_block_type::MASCHINENKONSTANTEN);
+		printf("done\n");
 	} catch (std::exception const &exception) {
 		std::fprintf(stderr, "Exception while running client.\n%s\n", exception.what());
 #ifdef WIN32
