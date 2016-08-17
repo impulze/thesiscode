@@ -2,8 +2,13 @@
 #include "wrap_mmictrl.h"
 #include "wrap_protocol.h"
 
+#include <cmath>
+
 #ifdef WIN32
 #include <winsock2.h>
+#include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 #if 0
@@ -75,6 +80,26 @@ int client_main(int argc, char **argv)
 		printf("send file\n");
 		ctrl.send_file_blocked("C:\\Eckelmann\\StdHMI\\log\\vom_nc.mk", "", wrap::transfer_block_type::MASCHINENKONSTANTEN);
 		printf("done\n");
+		std::map<std::uint16_t, double> parameters;
+		for (int i = 0; i < 1024; i++) {
+			parameters[i] = 0;
+		}
+		ctrl.read_param_array(parameters);
+		const std::map<std::uint16_t, double> old_parameters = parameters;
+#ifndef WIN32
+		sleep(10);
+#else
+		Sleep(10);
+#endif
+		ctrl.read_param_array(parameters);
+		for (int i = 0; i < 1024; i++) {
+			const double old_value = old_parameters.find(i)->second;
+			const double new_value = parameters.find(i)->second;
+
+			if (std::fabs(new_value - old_value) > 0.000001) {
+				std::printf("param changed [%d]: %g -> %g\n", i, old_value, new_value);
+			}
+		}
 	} catch (std::exception const &exception) {
 		std::fprintf(stderr, "Exception while running client.\n%s\n", exception.what());
 #ifdef WIN32
