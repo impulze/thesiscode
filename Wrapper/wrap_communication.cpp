@@ -536,7 +536,7 @@ void client_data::send_response(wrap::message const &message)
 			}
 
 			const std::uint16_t size = message.extract_bit16(0);
-			std::uint16_t position = 1;
+			std::uint16_t position = 2;
 			std::map<std::uint16_t, double> parameters;
 
 			for (std::uint16_t i = 0; i < size; i++) {
