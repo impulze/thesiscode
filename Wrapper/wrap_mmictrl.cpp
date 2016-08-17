@@ -293,7 +293,7 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 		} else {
 			const std::string error_string = message.extract_string(1);
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "[ERROR] CNC Connection to <%s> failed.\n[ERROR] %s\n", name.c_str(), error_string.c_str());
+			std::snprintf(exception_string, sizeof exception_string, "CNC Connection to <%s> failed.\n%s\n", name.c_str(), error_string.c_str());
 			throw std::runtime_error(exception_string);
 		}
 	} catch (...) {
@@ -315,7 +315,7 @@ remote_control::~remote_control()
 			std::printf("[STATUS] CNC Connection to <%s> closed.\n", impl_->name.c_str());
 		} else {
 			const std::string error_string = message.extract_string(1);
-			std::fprintf(stderr, "[ERROR] CNC Closing connection for <%s> failed.\n[ERROR] %s\n", impl_->name.c_str(), error_string.c_str());
+			std::fprintf(stderr, "CNC Closing connection for <%s> failed.\n%s\n", impl_->name.c_str(), error_string.c_str());
 		}
 
 		delete impl_;
@@ -545,7 +545,7 @@ void check_server_error(wrap::client &client, wrap::message const &response)
 	if (response.type == wrap::message_type::SERVER_ERROR) {
 		const std::string error_string = response.extract_string(0);
 		char exception_string[1024];
-		std::snprintf(exception_string, sizeof exception_string, "A server error occured.\n%s", error_string.c_str());
+		std::snprintf(exception_string, sizeof exception_string, "A server error occured while handling client.\n%s", error_string.c_str());
 		throw std::runtime_error(exception_string);
 	}
 }
@@ -554,7 +554,7 @@ void check_correct_response_type(wrap::client &client, wrap::message const &resp
 {
 	if (response.type != type) {
 		char exception_string[1024];
-		std::snprintf(exception_string, sizeof exception_string, "Unexpected response type.\n");
+		std::snprintf(exception_string, sizeof exception_string, "Unexpected response type while handling client.\n");
 		throw std::runtime_error(exception_string);
 	}
 }
