@@ -528,6 +528,44 @@ void client_data::send_response(wrap::message const &message)
 			break;
 		}
 
+		case wrap::message_type::CTRL_READ_PARAM_ARRAY: {
+			if (control_iterator == g_controls.end()) {
+				char exception_string[1024];
+				std::snprintf(exception_string, sizeof exception_string, "Unable to read param array for non-existing CNC connection for client <%s>.", address_string.c_str());
+				throw std::runtime_error(exception_string);
+			}
+
+			const std::uint16_t size = message.extract_bit16(0);
+			std::uint16_t position = 1;
+			std::map<std::uint16_t, double> parameters;
+
+			for (std::uint16_t i = 0; i < size; i++) {
+				const std::uint16_t index = message.extract_bit16(position);
+				parameters[index] = 0;
+				position += 2;
+			}
+
+			response.reset(new wrap::message(wrap::message_type::CTRL_READ_PARAM_ARRAY_RESPONSE));
+
+			try {
+				control_iterator->second->read_param_array(parameters);
+			} catch (wrap::error const &error) {
+				response->append(static_cast<std::uint8_t>(1));
+				response->append(error.what());
+				response->append(error.win32_error);
+				break;
+			}
+
+			response->append(static_cast<std::uint8_t>(0));
+
+			for (auto const &parameter : parameters) {
+				const std::string double_string = std::to_string(parameter.second);
+				response->append(double_string);
+			}
+
+			break;
+		}
+
 #endif
 		default:
 			response.reset(new wrap::message(wrap::message_type::OK));

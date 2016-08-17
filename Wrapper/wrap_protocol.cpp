@@ -246,6 +246,10 @@ bool valid_message_type(std::uint16_t check_type)
 			return true;
 		case wrap::message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE:
 			return true;
+		case wrap::message_type::CTRL_READ_PARAM_ARRAY:
+			return true;
+		case wrap::message_type::CTRL_READ_PARAM_ARRAY_RESPONSE:
+			return true;
 	}
 
 	return false;

@@ -414,6 +414,8 @@ void remote_control::read_param_array(std::map<std::uint16_t, double> &parameter
 {
 	wrap::message message(wrap::message_type::CTRL_READ_PARAM_ARRAY);
 
+	message.append(static_cast<std::uint16_t>(parameters.size()));
+
 	for (auto const &parameter: parameters) {
 		message.append(parameter.first);
 	}
@@ -434,7 +436,7 @@ void remote_control::read_param_array(std::map<std::uint16_t, double> &parameter
 	for (auto &parameter: parameters) {
 		const std::string double_string = response.extract_string(position);
 		parameter.second = std::stod(double_string);
-		position += 2 + double_string.size();
+		position += static_cast<std::uint16_t>(2 + double_string.size());
 	}
 }
 
