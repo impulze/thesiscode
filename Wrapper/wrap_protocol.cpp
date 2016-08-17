@@ -91,8 +91,8 @@ std::unique_ptr<message> message::from_bytes(std::vector<std::uint8_t> &bytes)
 
 	message.reset(new wrap::message(static_cast<message_type>(check_type)));
 
-	message->size += static_cast<std::uint16_t>(bytes.size() - 6);
-	message->contents.insert(message->contents.end(), bytes.begin() + 6, bytes.end());
+	message->size += check_size - 6;
+	message->contents.insert(message->contents.end(), bytes.begin() + 6, bytes.begin() + check_size);
 
 	bytes.erase(bytes.begin(), bytes.begin() + message->size);
 
@@ -165,7 +165,7 @@ void message::append(std::uint32_t number)
 
 std::string message::extract_string(std::uint16_t position) const
 {
-	if ((contents.size() >= 2 && contents.size() - 2 > position) || contents.size() < 2) {
+	if ((contents.size() >= 2 && contents.size() - 2 < position) || contents.size() < 2) {
 		throw std::runtime_error("Message cannot extract string at this position.");
 	}
 
@@ -173,11 +173,11 @@ std::string message::extract_string(std::uint16_t position) const
 	std::memcpy(&nlength, contents.data() + position, 2);
 	const std::uint16_t length = ntohs(nlength);
 
-	if (nlength > contents.size() - position - 2) {
+	if (length > contents.size() - position - 2) {
 		throw std::runtime_error("Message cannot extract string at this position.");
 	}
 
-	std::string string(contents.data() + position + 2, contents.data() + position + 2 + nlength);
+	std::string string(contents.data() + position + 2, contents.data() + position + 2 + length);
 
 	return string;
 }
@@ -222,12 +222,19 @@ std::uint32_t message::extract_bit32(std::uint16_t position) const
 bool valid_message_type(std::uint16_t check_type)
 {
 	switch (static_cast<wrap::message_type>(check_type)) {
+		case wrap::message_type::OK:
+			return true;
 		case wrap::message_type::SERVER_ERROR:
 			return true;
 		case wrap::message_type::CTRL_OPEN:
 			return true;
 		case wrap::message_type::CTRL_OPEN_RESPONSE:
 			return true;
+		case wrap::message_type::CTRL_CLOSE:
+			return true;
+		case wrap::message_type::CTRL_CLOSE_RESPONSE:
+			return true;
+
 	}
 
 	return false;

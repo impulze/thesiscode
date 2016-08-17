@@ -77,8 +77,16 @@ static std::string address_to_string(const sockaddr_storage *address, int family
 
 struct client_data
 {
-	std::unique_ptr<wrap::message> recv_message();
+	enum class recv_status
+	{
+		GOT_EOF,
+		GOT_MESSAGES,
+		NEED_MORE_DATA
+	};
+
+	bool recv_bytes();
 	void send_message(wrap::message const &message);
+	void send_response(wrap::message const &message);
 
 	socket_type socket;
 	std::string address_string;
@@ -335,49 +343,32 @@ std::string address_to_string(const sockaddr_storage *address, int family)
 	throw socket_error("inet_ntop");
 }
 
-std::unique_ptr<wrap::message> client_data::recv_message()
+bool client_data::recv_bytes()
 {
-	const size_t prev_size = buffer.size();
-
-	buffer.resize(prev_size + READ_BUFFER);
-
-	std::uint8_t *data = buffer.data();
+	char read_buffer[READ_BUFFER];
 
 #ifndef WIN32
 	ssize_t result;
-
-	result = recv(socket, data + prev_size, READ_BUFFER, 0);
 #else
 	int result;
-
-	result = recv(socket, reinterpret_cast<char *>(data + prev_size), READ_BUFFER, 0);
 #endif
 
-	if (result <= 0) {
-		char exception_string[1024];
+	result = recv(socket, read_buffer, sizeof read_buffer, 0);
 
+	if (result <= 0) {
 		if (result == 0) {
-			std::snprintf(exception_string, sizeof exception_string, "EOF while reading message from <%s>\n", address_string.c_str());
+			return false;
 		} else {
 			const std::string error_string = error_string_from_function_call("read", true);
-
-			std::snprintf(exception_string, sizeof exception_string, "While reading from <%s>:\n%s\n", address_string.c_str(), error_string.c_str());
-		}
-
-		throw std::runtime_error(exception_string);
-	}
-
-	std::unique_ptr<wrap::message> message = wrap::message::from_bytes(buffer);
-
-	if (!message) {
-		if (buffer.size() >= READ_BUFFER_MAX) {
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "No messages received yet from client <%s> after <%d> bytes.\nForcing disconnect.\n", address_string.c_str(), READ_BUFFER_MAX);
+			std::snprintf(exception_string, sizeof exception_string, "While reading from <%s>:\n%s\n", address_string.c_str(), error_string.c_str());
 			throw std::runtime_error(exception_string);
 		}
 	}
 
-	return message;
+	buffer.insert(buffer.end(), read_buffer, read_buffer + result);
+
+	return true;
 }
 
 void client_data::send_message(wrap::message const &message)
@@ -399,6 +390,77 @@ void client_data::send_message(wrap::message const &message)
 		errno = old_errno;
 		throw socket_error("send");
 	}
+}
+
+void client_data::send_response(wrap::message const &message)
+{
+	std::unique_ptr<wrap::message> response;
+
+#ifdef WIN32
+	auto control_iterator = g_controls.find(this);
+#endif
+
+	switch (message.type) {
+#ifdef WIN32
+		case wrap::message_type::CTRL_OPEN: {
+			const std::string name = message.extract_string(0);
+
+			if (control_iterator != g_controls.end()) {
+				char exception_string[1024];
+				std::snprintf(exception_string, sizeof exception_string, "Client already opened a CNC connection to <%s>.\n", name.c_str());
+				throw std::runtime_error(exception_string);
+			}
+
+			std::unique_ptr<client_local_control> new_control;
+
+			response.reset(new wrap::message(wrap::message_type::CTRL_OPEN_RESPONSE));
+
+			try {
+				new_control.reset(new client_local_control(name));
+			} catch (std::exception const &exception) {
+				std::fprintf(stderr, "Unable to open CNC connection to <%s>\n.%s\n", name.c_str(), exception.what());
+				response->append(static_cast<std::uint8_t>(1));
+				response->append(exception.what());
+				break;
+			}
+
+			response->append(static_cast<std::uint8_t>(0));
+
+			g_controls[this] = std::move(new_control);
+
+			break;
+		}
+
+		case wrap::message_type::CTRL_CLOSE: {
+			if (control_iterator == g_controls.end()) {
+				char exception_string[1024];
+				std::snprintf(exception_string, sizeof exception_string, "Unable to close non-existing CNC connection for client <%s>.\n", address_string.c_str());
+				throw std::runtime_error(exception_string);
+			}
+
+			response.reset(new wrap::message(wrap::message_type::CTRL_CLOSE_RESPONSE));
+
+			try {
+				printf("erasing\n");
+				g_controls.erase(control_iterator);
+			}
+			catch (std::exception const &exception) {
+				std::fprintf(stderr, "Unable to close CNC connection for client <%s>\n.%s\n", address_string.c_str(), exception.what());
+				response->append(static_cast<std::uint8_t>(1));
+				response->append(exception.what());
+				break;
+			}
+
+			response->append(static_cast<std::uint8_t>(0));
+			break;
+		}
+#endif
+		default:
+			response.reset(new wrap::message(wrap::message_type::OK));
+			break;
+	}
+
+	send_message(*response);
 }
 
 #ifdef WIN32
@@ -485,110 +547,60 @@ void server_impl::remove_client(client_data &client_data)
 			break;
 		}
 	}
+
+#ifdef WIN32
+	auto iterator = g_controls.find(&client_data);
+
+	if (iterator != g_controls.end()) {
+		g_controls.erase(iterator);
+	}
+#endif
 }
 
 void server_impl::handle_client(client_data &client_data)
 {
-	std::unique_ptr<wrap::message> message;
+	bool result;
 
 	try {
-		message = client_data.recv_message();
-	} catch (std::exception const &exception) {
+		result = client_data.recv_bytes();
+	} catch (...) {
 		close_socket(client_data.socket);
 		remove_client(client_data);
-		throw exception;
+		throw;
 	}
 
-	if (!message) {
+	if (!result) {
+		std::fprintf(stderr, "Client <%s> has sent EOF. Client will be removed.\n", client_data.address_string.c_str());
+		close_socket(client_data.socket);
+		remove_client(client_data);
 		return;
 	}
 
-	if (callback) {
-		callback(*message);
-	}
+	while (!client_data.buffer.empty()) {
+		auto const prev_size = client_data.buffer.size();
 
-	std::unique_ptr<wrap::message> response;
+		std::unique_ptr<wrap::message> message = wrap::message::from_bytes(client_data.buffer);
 
-#ifdef WIN32
-	auto control_iterator = g_controls.find(&client_data);
-#endif
-
-	try {
-		switch (message->type) {
-#ifdef WIN32
-			case wrap::message_type::CTRL_OPEN: {
-				const std::string name = message->extract_string(0);
-
-				if (control_iterator != g_controls.end()) {
-					char exception_string[1024];
-					std::snprintf(exception_string, sizeof exception_string, "Client already opened a CNC connection to <%s>.\n", name.c_str());
-					throw std::runtime_error(exception_string);
-				}
-
-				std::unique_ptr<client_local_control> new_control;
-
-				response.reset(new wrap::message(wrap::message_type::CTRL_OPEN_RESPONSE));
-
-				try {
-					new_control.reset(new client_local_control(name));
-				} catch (std::exception const &exception) {
-					std::fprintf(stderr, "Unable to open CNC connection to <%s>\n.%s\n", name.c_str(), exception.what());
-					response->append(static_cast<std::uint8_t>(1));
-					response->append(exception.what());
-					break;
-				}
-
-				response->append(static_cast<std::uint8_t>(0));
-
-				g_controls[&client_data] = std::move(new_control);
-
-				break;
+		if (client_data.buffer.size() == prev_size) {
+			// needs more data
+			break;
+		} else if (!message) {
+			char exception_string[1024];
+			std::snprintf(exception_string, sizeof exception_string, "Client <%s> send invalid message data. Client will be removed.\n", client_data.address_string.c_str());
+			throw std::runtime_error(exception_string);
+		} else {
+			if (callback) {
+				callback(*message);
 			}
 
-			case wrap::message_type::CTRL_CLOSE: {
-				if (control_iterator == g_controls.end()) {
-					char exception_string[1024];
-					std::snprintf(exception_string, sizeof exception_string, "Unable to close non-existing CNC connection for client <%s>.\n", client_data.address_string.c_str());
-					throw std::runtime_error(exception_string);
-				}
-
-				response.reset(new wrap::message(wrap::message_type::CTRL_CLOSE_RESPONSE));
-
-				try {
-					g_controls.erase(control_iterator);
-				} catch (std::exception const &exception) {
-					std::fprintf(stderr, "Unable to close CNC connection for client <%s>\n.%s\n", client_data.address_string.c_str(), exception.what());
-					response->append(static_cast<std::uint8_t>(1));
-					response->append(exception.what());
-					break;
-				}
-
-				response->append(static_cast<std::uint8_t>(0));
-				break;
+			try {
+				client_data.send_response(*message);
+			} catch (std::exception const &exception) {
+				std::unique_ptr<wrap::message> response(new wrap::message(wrap::message_type::SERVER_ERROR));
+				response->append(exception.what());
+				client_data.send_message(*response);
 			}
-#endif
-
-			default:
-				response.reset(new wrap::message(wrap::message_type::OK));
-				break;
 		}
-	} catch (std::exception const &exception) {
-		response.reset(new wrap::message(wrap::message_type::SERVER_ERROR));
-		response->append(exception.what());
-	}
-
-	try {
-		client_data.send_message(*response);
-	} catch (...) {
-#ifdef WIN32
-		auto iterator = g_controls.find(&client_data);
-
-		if (iterator != g_controls.end()) {
-			g_controls.erase(iterator);
-		}
-#endif
-
-		throw;
 	}
 }
 
@@ -715,6 +727,8 @@ void server::run_one(int timeout_ms)
 					close_socket(client_data.socket);
 					impl_->remove_client(client_data);
 				} else {
+					close_socket(client_data.socket);
+					impl_->remove_client(client_data);
 					throw std::runtime_error("Unexpected polling state for client descriptor..");
 				}
 			}
@@ -783,7 +797,7 @@ client::client(std::string const &address, std::uint16_t port)
 		throw;
 	}
 
-	printf("Initiate connection to <%s>:<%hu>\n", address_string.c_str(), port);
+	std::printf("Initiate connection to <%s>:<%hu>\n", address_string.c_str(), port);
 
 	const int result = connect(impl_->data.socket, reinterpret_cast<const sockaddr *>(&used_entry.address), used_entry.address_length);
 
@@ -809,9 +823,8 @@ message client::send_message(message const &message, int timeout_ms)
 	impl_->data.send_message(message);
 
 	const std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
-	std::unique_ptr<wrap::message> response;
 
-	while (true) {
+	while (timeout_ms > 0) {
 #ifndef WIN32
 		const int result = poll(&(impl_->data.pollfd), 1, timeout_ms);
 #else
@@ -827,27 +840,38 @@ message client::send_message(message const &message, int timeout_ms)
 		}
 
 		if (result == 0) {
-			throw timeout_exception("No server data for message response.");
+			throw timeout_exception("Requesting server data for message response timed out.");
 		}
 
 		if (impl_->data.pollfd.revents & POLLIN) {
-			response = impl_->data.recv_message();
+			const bool result = impl_->data.recv_bytes();
 
-			if (!response) {
-				const std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-				const std::chrono::milliseconds elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
+			if (!result) {
+				throw std::runtime_error("Requesting server data for message respones resulted in reading EOF.");
+			}
 
-				if (elapsed.count() > (std::numeric_limits<int>::max)()) {
-					timeout_ms = 0;
-				} else {
-					timeout_ms -= static_cast<int>(elapsed.count());
+			auto const prev_size = impl_->data.buffer.size();
+
+			std::unique_ptr<wrap::message> response = wrap::message::from_bytes(impl_->data.buffer);
+
+			if (impl_->data.buffer.size() == prev_size) {
+				// needs more data
+				if (timeout_ms != 0) {
+					const std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+					const std::chrono::milliseconds elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
+
+					if (elapsed.count() > (std::numeric_limits<int>::max)()) {
+						timeout_ms = 0;
+					} else {
+						timeout_ms -= static_cast<int>(elapsed.count());
+					}
 				}
 
-				if (timeout_ms <= 0) {
-					throw timeout_exception("No response from server after timeout.");
-				}
+				continue;
+			} else if (!response) {
+				throw std::runtime_error("Requesting server data for message response resulted in invalid message.");
 			} else {
-				return *response;
+				printf("buffer should be empty: %d\n", impl_->data.buffer.size());
 			}
 		} else if (impl_->data.pollfd.revents & (POLLHUP|POLLERR|POLLNVAL)) {
 			throw std::runtime_error("Unexpected polling state for client descriptor.");
@@ -855,6 +879,8 @@ message client::send_message(message const &message, int timeout_ms)
 			assert(false);
 		}
 	}
+
+	throw timeout_exception("Requesting server data for message response timeout (Not enough data).");
 }
 
 timeout_exception::timeout_exception(std::string const &error_msg)

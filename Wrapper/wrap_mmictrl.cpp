@@ -174,8 +174,8 @@ local_control::local_control(std::string const &name)
 
 	try {
 		g_control_mapping[this] = this;
-	}
-	catch (...) {
+	} catch (...) {
+		ncrCloseControl_p(impl_->handle);
 		delete impl_;
 		throw;
 	}
@@ -189,10 +189,9 @@ local_control::~local_control()
 
 	for (std::map<LPVOID, control *>::iterator it = g_control_mapping.begin(); it != g_control_mapping.end();) {
 		if (it->first == this) {
-			it = g_control_mapping.erase(it);
+			g_control_mapping.erase(it);
 			return;
-		}
-		else {
+		} else {
 			++it;
 		}
 	}
@@ -413,7 +412,7 @@ void remote_control::read_param_array(std::map<std::uint16_t, double> &parameter
 #ifdef WIN32
 void WINAPI callback(ULONG type, ULONG param, LPVOID context)
 {
-	for (auto &entry : g_control_mapping) {
+	for (auto &entry: g_control_mapping) {
 		if (entry.first == context) {
 			entry.second->handle_message(conversion_callback_type_type(type), param);
 			return;
