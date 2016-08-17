@@ -412,38 +412,30 @@ void remote_control::send_message(MSG_TR *message)
 
 void remote_control::read_param_array(std::map<std::uint16_t, double> &parameters)
 {
-	if (parameters.size() > 0xFFFF) {
-		throw std::runtime_error("Only 16-bit size allowed for read_param_array.");
+	wrap::message message(wrap::message_type::CTRL_READ_PARAM_ARRAY);
+
+	for (auto const &parameter: parameters) {
+		message.append(parameter.first);
 	}
 
-/*
-	std::vector<std::uint16_t> indices;
-	std::vector<double> values;
+	wrap::message response = impl_->client->send_message(message, 5000);
 
-	indices.reserve(parameters.size());
-	values.reserve(parameters.size());
+	check_server_error(*(impl_->client), response);
+	check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_READ_PARAM_ARRAY_RESPONSE);
 
-	for (auto const &parameter : parameters) {
-		indices.push_back(parameter.first);
-		values.push_back(parameter.second);
+	if (response.contents[0] != 0) {
+		const std::string error_string = response.extract_string(1);
+		const std::uint32_t win32_error = response.extract_bit32(static_cast<std::uint16_t>(1 + 2 + error_string.size()));
+		throw error(error_string, win32_error);
 	}
 
-	const BOOL result = ncrReadParamArray_p(impl_->handle, indices.data(), values.data(), static_cast<WORD>(parameters.size()));
+	std::uint16_t position = 1;
 
-	if (result != TRUE) {
-		throw error::create_error();
+	for (auto &parameter: parameters) {
+		const std::string double_string = response.extract_string(position);
+		parameter.second = std::stod(double_string);
+		position += 2 + double_string.size();
 	}
-
-	std::vector<double>::const_iterator value_it = values.begin();
-	std::map<std::uint16_t, double>::iterator parameters_it = parameters.begin();
-
-	while (value_it != values.end()) {
-		parameters_it->second = *value_it;
-		++parameters_it;
-		++value_it;
-	}
-*/
-	throw;
 }
 
 }
