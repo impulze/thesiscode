@@ -400,7 +400,7 @@ void client_data::send_response(wrap::message const &message)
 
 			if (control_iterator != g_controls.end()) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Client already opened a CNC connection to <%s>.\n", name.c_str());
+				std::snprintf(exception_string, sizeof exception_string, "Client already opened a CNC connection to <%s>.", name.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -411,7 +411,7 @@ void client_data::send_response(wrap::message const &message)
 			try {
 				new_control.reset(new client_local_control(name));
 			} catch (std::exception const &exception) {
-				std::fprintf(stderr, "Unable to open CNC connection to <%s>\n.%s\n", name.c_str(), exception.what());
+				std::fprintf(stderr, "Unable to open CNC connection to <%s>: %s", name.c_str(), exception.what());
 				response->append(static_cast<std::uint8_t>(1));
 				response->append(exception.what());
 				break;
@@ -427,18 +427,17 @@ void client_data::send_response(wrap::message const &message)
 		case wrap::message_type::CTRL_CLOSE: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Unable to close non-existing CNC connection for client <%s>.\n", address_string.c_str());
+				std::snprintf(exception_string, sizeof exception_string, "Unable to close non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
 			response.reset(new wrap::message(wrap::message_type::CTRL_CLOSE_RESPONSE));
 
 			try {
-				printf("erasing\n");
 				g_controls.erase(control_iterator);
 			}
 			catch (std::exception const &exception) {
-				std::fprintf(stderr, "Unable to close CNC connection for client <%s>\n.%s\n", address_string.c_str(), exception.what());
+				std::fprintf(stderr, "Unable to close CNC connection for client <%s>: %s", address_string.c_str(), exception.what());
 				response->append(static_cast<std::uint8_t>(1));
 				response->append(exception.what());
 				break;
@@ -447,6 +446,88 @@ void client_data::send_response(wrap::message const &message)
 			response->append(static_cast<std::uint8_t>(0));
 			break;
 		}
+
+		case wrap::message_type::CTRL_GET_INIT: {
+			if (control_iterator == g_controls.end()) {
+				char exception_string[1024];
+				std::snprintf(exception_string, sizeof exception_string, "Unable to get state for non-existing CNC connection for client <%s>.", address_string.c_str());
+				throw std::runtime_error(exception_string);
+			}
+
+			bool state;
+			response.reset(new wrap::message(wrap::message_type::CTRL_GET_INIT_RESPONSE));
+
+			try {
+				state = control_iterator->second->get_init_state();
+			} catch (std::exception const &exception) {
+				response->append(static_cast<std::uint8_t>(1));
+				response->append(exception.what());
+				break;
+			}
+
+			response->append(static_cast<std::uint8_t>(0));
+			response->append(static_cast<std::uint8_t>(state ? 1 : 0));
+			break;
+		}
+
+		case wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED: {
+			if (control_iterator == g_controls.end()) {
+				char exception_string[1024];
+				std::snprintf(exception_string, sizeof exception_string, "Unable to load firmware for non-existing CNC connection for client <%s>.", address_string.c_str());
+				throw std::runtime_error(exception_string);
+			}
+
+			response.reset(new wrap::message(wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED_RESPONSE));
+
+			const std::string config_name = message.extract_string(0);
+			wrap::init_status status;
+
+			try {
+				status = control_iterator->second->load_firmware_blocked(config_name);
+			} catch (wrap::error const &error) {
+				response->append(static_cast<std::uint8_t>(1));
+				response->append(error.what());
+				response->append(error.win32_error);
+				break;
+			}
+
+			response->append(static_cast<std::uint8_t>(0));
+			response->append(static_cast<std::uint8_t>(status));
+			break;
+		}
+
+		case wrap::message_type::CTRL_SEND_FILE_BLOCKED: {
+			if (control_iterator == g_controls.end()) {
+				char exception_string[1024];
+				std::snprintf(exception_string, sizeof exception_string, "Unable to send file to non-existing CNC connection for client <%s>.", address_string.c_str());
+				throw std::runtime_error(exception_string);
+			}
+
+			response.reset(new wrap::message(wrap::message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE));
+
+			const std::string name = message.extract_string(0);
+			const std::string header = message.extract_string(static_cast<std::uint16_t>(2 + name.size()));
+			const wrap::transfer_block_type type = static_cast<wrap::transfer_block_type>(message.extract_bit8(static_cast<std::uint16_t>(2 + name.size() + 2 + header.size())));
+
+			try {
+				control_iterator->second->send_file_blocked(name, header, type);
+			} catch (wrap::transfer_exception_error const &error) {
+				response->append(static_cast<std::uint8_t>(1));
+				response->append(static_cast<std::uint8_t>(type));
+				response->append(error.what());
+				response->append(error.win32_error);
+				break;
+			} catch (wrap::transfer_exception const &exception) {
+				response->append(static_cast<std::uint8_t>(1));
+				response->append(static_cast<std::uint8_t>(type));
+				response->append(exception.what());
+				break;
+				}
+
+			response->append(static_cast<std::uint8_t>(0));
+			break;
+		}
+
 #endif
 		default:
 			response.reset(new wrap::message(wrap::message_type::OK));

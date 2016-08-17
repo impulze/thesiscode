@@ -364,7 +364,7 @@ init_status remote_control::load_firmware_blocked(std::string const &config_name
 	}
 
 	const std::string error_string = message.extract_string(1);
-	const std::uint32_t win32_error = message.extract_bit32(1 + 2 + error_string.size());
+	const std::uint32_t win32_error = message.extract_bit32(static_cast<std::uint16_t>(1 + 2 + error_string.size()));
 
 	throw error(error_string, win32_error);
 }
@@ -389,7 +389,7 @@ void remote_control::send_file_blocked(std::string const &name, std::string cons
 	const std::string error_string = message.extract_string(2);
 
 	if (status == wrap::transfer_status_type::FAIL) {
-		const std::uint32_t win32_error = message.extract_bit32(2 + 2 + error_string.size());
+		const std::uint32_t win32_error = message.extract_bit32(static_cast<std::uint16_t>(2 + 2 + error_string.size()));
 		throw transfer_exception_error(error_string, status, win32_error);
 	} else {
 		throw transfer_exception(error_string, status);
@@ -499,7 +499,7 @@ void throw_transfer_exception(LONG result)
 	}
 }
 
-std::uint32_t block_type_conversion(wrap::transfer_block_type type)
+LONG block_type_conversion(wrap::transfer_block_type type)
 {
 	switch (type) {
 		case wrap::transfer_block_type::NC_PROGRAMM:
