@@ -104,7 +104,7 @@ void message::append(std::string const &string)
 	const std::uint16_t current_contents_size = static_cast<std::uint16_t>(contents.size());
 	const std::uint16_t append_size = static_cast<std::uint16_t>(2 + string.size());
 
-	if (size + append_size > (std::numeric_limits<std::uint16_t>::max)()) {
+	if (size > (std::numeric_limits<std::uint16_t>::max)() - append_size) {
 		throw std::runtime_error("String too long for message.");
 	}
 
@@ -122,7 +122,7 @@ void message::append(std::uint8_t byte)
 	const std::uint16_t current_contents_size = static_cast<std::uint16_t>(contents.size());
 	const std::uint16_t append_size = static_cast<std::uint16_t>(1);
 
-	if (size + append_size > (std::numeric_limits<std::uint16_t>::max)()) {
+	if (size > (std::numeric_limits<std::uint16_t>::max)() - append_size) {
 		throw std::runtime_error("Message already full.");
 	}
 
@@ -136,7 +136,7 @@ void message::append(std::uint16_t number)
 	const std::uint16_t current_contents_size = static_cast<std::uint16_t>(contents.size());
 	const std::uint16_t append_size = static_cast<std::uint16_t>(2);
 
-	if (size + append_size > (std::numeric_limits<std::uint16_t>::max)()) {
+	if (size > (std::numeric_limits<std::uint16_t>::max)() - append_size) {
 		throw std::runtime_error("Message already full.");
 	}
 
@@ -152,7 +152,7 @@ void message::append(std::uint32_t number)
 	const std::uint16_t current_contents_size = static_cast<std::uint16_t>(contents.size());
 	const std::uint16_t append_size = static_cast<std::uint16_t>(4);
 
-	if (size + append_size > (std::numeric_limits<std::uint16_t>::max)()) {
+	if (size > (std::numeric_limits<std::uint16_t>::max)() - append_size) {
 		throw std::runtime_error("Message already full.");
 	}
 
@@ -161,6 +161,60 @@ void message::append(std::uint32_t number)
 
 	const std::uint32_t nnumber = htonl(number);
 	std::memcpy(contents.data() + current_contents_size, &nnumber, 4);
+}
+
+std::string message::extract_string(std::uint16_t position) const
+{
+	if ((contents.size() >= 2 && contents.size() - 2 > position) || contents.size() < 2) {
+		throw std::runtime_error("Message cannot extract string at this position.");
+	}
+
+	std::uint16_t nlength;
+	std::memcpy(&nlength, contents.data() + position, 2);
+	const std::uint16_t length = ntohs(nlength);
+
+	if (nlength > contents.size() - position - 2) {
+		throw std::runtime_error("Message cannot extract string at this position.");
+	}
+
+	std::string string(contents.data() + position + 2, contents.data() + position + 2 + nlength);
+
+	return string;
+}
+
+std::uint8_t message::extract_bit8(std::uint16_t position) const
+{
+	if ((contents.size() >= 1 && contents.size() - 1 > position) || contents.size() < 1) {
+		throw std::runtime_error("Message cannot extract byte at this position.");
+	}
+
+	return contents.data()[position];
+}
+
+std::uint16_t message::extract_bit16(std::uint16_t position) const
+{
+	if ((contents.size() >= 2 && contents.size() - 2 > position) || contents.size() < 2) {
+		throw std::runtime_error("Message cannot extract word at this position.");
+	}
+
+	std::uint16_t nnumber;
+	std::memcpy(&nnumber, contents.data() + position, 2);
+	std::uint16_t number = ntohs(nnumber);
+
+	return number;
+}
+
+std::uint32_t message::extract_bit32(std::uint16_t position) const
+{
+	if ((contents.size() >= 4 && contents.size() - 2 > position) || contents.size() < 4) {
+		throw std::runtime_error("Message cannot extract double word at this position.");
+	}
+
+	std::uint32_t nnumber;
+	std::memcpy(&nnumber, contents.data() + position, 4);
+	std::uint32_t number = ntohl(nnumber);
+
+	return number;
 }
 
 }

@@ -100,9 +100,11 @@ struct client_local_control
 	client_local_control(T &&... args);
 
 	void handle_message(wrap::callback_type_type type, unsigned long parameter) override;
+
+	std::string get_name() const;
 };
 
-static std::map<std::uint16_t, std::unique_ptr<client_local_control>> g_controls;
+static std::map<client_data *, std::unique_ptr<client_local_control>> g_controls;
 #endif
 
 namespace wrap
@@ -507,47 +509,61 @@ void server_impl::handle_client(client_data &client_data)
 
 	std::unique_ptr<wrap::message> response;
 
+#ifdef WIN32
+	auto control_iterator = g_controls.find(&client_data);
+#endif
+
 	try {
 		switch (message->type) {
 #ifdef WIN32
 			case wrap::message_type::CTRL_OPEN: {
-				static bool rand_initialized = false;
+				const std::string name = message->extract_string(0);
 
-				if (!rand_initialized) {
-					rand_initialized = true;
-					std::srand(static_cast<unsigned>(std::time(NULL)));
+				if (control_iterator != g_controls.end()) {
+					char exception_string[1024];
+					std::snprintf(exception_string, sizeof exception_string, "Client already opened a CNC connection to <%s>.\n", name.c_str());
+					throw std::runtime_error(exception_string);
 				}
-
-				std::uint16_t nlength;
-				std::memcpy(&nlength, message->contents.data(), 2);
-				const std::uint16_t length = ntohs(nlength);
-				std::string name(message->contents.data() + 2, message->contents.data() + 2 + length);
 
 				std::unique_ptr<client_local_control> new_control;
 
-				const std::uint16_t max_id = static_cast<std::uint16_t>((std::numeric_limits<std::uint16_t>::max)());
-
-				if (g_controls.size() == max_id) {
-					// No more space TODO
-				}
-
 				response.reset(new wrap::message(wrap::message_type::CTRL_OPEN_RESPONSE));
-
-				const std::uint16_t id = static_cast<std::uint16_t>(g_controls.size());
 
 				try {
 					new_control.reset(new client_local_control(name));
-				} 	catch (std::exception const &exception) {
-					std::fprintf(stderr, "Unable to open control to <%s>\n.%s\n", name.c_str(), exception.what());
+				} catch (std::exception const &exception) {
+					std::fprintf(stderr, "Unable to open CNC connection to <%s>\n.%s\n", name.c_str(), exception.what());
 					response->append(static_cast<std::uint8_t>(1));
 					response->append(exception.what());
 					break;
 				}
 
-				g_controls[id] = std::move(new_control);
+				response->append(static_cast<std::uint8_t>(0));
+
+				g_controls[&client_data] = std::move(new_control);
+
+				break;
+			}
+
+			case wrap::message_type::CTRL_CLOSE: {
+				if (control_iterator == g_controls.end()) {
+					char exception_string[1024];
+					std::snprintf(exception_string, sizeof exception_string, "Unable to close non-existing CNC connection for client <%s>.\n", client_data.address_string.c_str());
+					throw std::runtime_error(exception_string);
+				}
+
+				response.reset(new wrap::message(wrap::message_type::CTRL_CLOSE_RESPONSE));
+
+				try {
+					g_controls.erase(control_iterator);
+				} catch (std::exception const &exception) {
+					std::fprintf(stderr, "Unable to close CNC connection for client <%s>\n.%s\n", client_data.address_string.c_str(), exception.what());
+					response->append(static_cast<std::uint8_t>(1));
+					response->append(exception.what());
+					break;
+				}
 
 				response->append(static_cast<std::uint8_t>(0));
-				response->append(id);
 				break;
 			}
 #endif
@@ -561,7 +577,19 @@ void server_impl::handle_client(client_data &client_data)
 		response->append(exception.what());
 	}
 
-	client_data.send_message(*response);
+	try {
+		client_data.send_message(*response);
+	} catch (...) {
+#ifdef WIN32
+		auto iterator = g_controls.find(&client_data);
+
+		if (iterator != g_controls.end()) {
+			g_controls.erase(iterator);
+		}
+#endif
+
+		throw;
+	}
 }
 
 server::server(std::string const &address, std::uint16_t port)
@@ -808,7 +836,12 @@ message client::send_message(message const &message, int timeout_ms)
 			if (!response) {
 				const std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
 				const std::chrono::milliseconds elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
-				timeout_ms -= elapsed.count();
+
+				if (elapsed.count() > (std::numeric_limits<int>::max)()) {
+					timeout_ms = 0;
+				} else {
+					timeout_ms -= static_cast<int>(elapsed.count());
+				}
 
 				if (timeout_ms <= 0) {
 					throw timeout_exception("No response from server after timeout.");

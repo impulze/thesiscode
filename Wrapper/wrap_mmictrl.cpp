@@ -5,7 +5,6 @@
 #include <cassert>
 #include <codecvt>
 #include <cstdio>
-#include <cstring>
 #include <limits>
 #include <locale>
 #include <map>
@@ -81,7 +80,7 @@ struct local_control::local_impl
 
 struct remote_control::remote_impl
 {
-	std::uint32_t id;
+	std::string name;
 	std::shared_ptr<wrap::client> client;
 };
 
@@ -291,15 +290,9 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 		check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_OPEN_RESPONSE);
 
 		if (response.contents[0] == 0) {
-			std::uint16_t nid;
-			std::memcpy(&nid, response.contents.data() + 1, 2);
-			impl_->id = ntohs(nid);
-			std::printf("[STATUS] CNC Connection to <%s> successful (ID: <%hu>).\n", name.c_str(), impl_->id);
+			std::printf("[STATUS] CNC Connection to <%s> successful.\n", name.c_str());
 		} else {
-			std::uint16_t nlength;
-			std::memcpy(&nlength, response.contents.data() + 1, 2);
-			const std::uint16_t length = ntohs(nlength);
-			const std::string error_string(response.contents.data() + 1 + 2, response.contents.data() + 1 + 2 + length);
+			const std::string error_string = message.extract_string(1);
 			char exception_string[1024];
 			std::snprintf(exception_string, sizeof exception_string, "[ERROR] CNC Connection to <%s> failed.\n[ERROR] %s\n", name.c_str(), error_string.c_str());
 			throw std::runtime_error(exception_string);
@@ -312,9 +305,24 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 
 remote_control::~remote_control()
 {
-	//ncrCloseControl_p(impl_->handle);
+	try {
+		wrap::message message(wrap::message_type::CTRL_CLOSE);
+		wrap::message response = impl_->client->send_message(message, 2000);
 
-	delete impl_;
+		check_server_error(*(impl_->client), response);
+		check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_CLOSE_RESPONSE);
+
+		if (response.contents[0] == 0) {
+			std::printf("[STATUS] CNC Connection to <%s> closed.\n", impl_->name.c_str());
+		} else {
+			const std::string error_string = message.extract_string(1);
+			std::fprintf(stderr, "[ERROR] CNC Closing connection for <%s> failed.\n[ERROR] %s\n", impl_->name.c_str(), error_string.c_str());
+		}
+
+		delete impl_;
+	} catch (...) {
+		delete impl_;
+	}
 }
 
 bool remote_control::get_init_state()
@@ -536,10 +544,7 @@ wrap::callback_type_type conversion_callback_type_type(LONG type)
 void check_server_error(wrap::client &client, wrap::message const &response)
 {
 	if (response.type == wrap::message_type::SERVER_ERROR) {
-		std::uint16_t nlength;
-		std::memcpy(&nlength, response.contents.data(), 2);
-		const std::uint16_t length = ntohs(nlength);
-		const std::string error_string(response.contents.data() + 2, response.contents.data() + 2 + length);
+		const std::string error_string = response.extract_string(0);
 		char exception_string[1024];
 		std::snprintf(exception_string, sizeof exception_string, "A server error occured.\n%s", error_string.c_str());
 		throw std::runtime_error(exception_string);

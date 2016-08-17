@@ -23,6 +23,8 @@ enum class message_type : std::uint16_t
 	SERVER_ERROR,
 	CTRL_OPEN,
 	CTRL_OPEN_RESPONSE,
+	CTRL_CLOSE,
+	CTRL_CLOSE_RESPONSE,
 };
 
 /*
@@ -44,6 +46,11 @@ struct message
 	void append(std::uint8_t byte);
 	void append(std::uint16_t number);
 	void append(std::uint32_t number);
+
+	std::string extract_string(std::uint16_t position) const;
+	std::uint8_t extract_bit8(std::uint16_t position) const;
+	std::uint16_t extract_bit16(std::uint16_t position) const;
+	std::uint32_t extract_bit32(std::uint16_t position) const;
 
 	const std::uint8_t version;
 	const message_type type;

@@ -28,37 +28,6 @@ static void sigint_handler(int signal_number)
 	g_run_server = false;
 }
 
-int main(int argc, char **argv)
-{
-	wrap::client client("127.0.0.1", 55544);
-
-	std::vector<std::uint8_t> contents;
-
-	{
-		contents.resize(13);
-		std::memcpy(contents.data(), "abcdefghijkl", 13);
-	}
-
-	std::vector<wrap::message> messages;
-
-	messages.push_back(create_message(wrap::message_type::CHECK, contents));
-
-	contents[11] = 'm';
-	messages.push_back(create_message(wrap::message_type::CHECK, contents));
-
-	contents[11] = 'n';
-	messages.push_back(create_message(wrap::message_type::CHECK, contents));
-
-	for (auto const &message : messages) {
-		client.send_message(message, 1000);
-	}
-
-#ifndef WIN32
-	sleep(10);
-#else
-	Sleep(10);
-#endif
-
 #if 0
 	std::signal(SIGINT, sigint_handler);
 
