@@ -77,13 +77,6 @@ static std::string address_to_string(const sockaddr_storage *address, int family
 
 struct client_data
 {
-	enum class recv_status
-	{
-		GOT_EOF,
-		GOT_MESSAGES,
-		NEED_MORE_DATA
-	};
-
 	bool recv_bytes();
 	void send_message(wrap::message const &message);
 	void send_response(wrap::message const &message);
