@@ -47,8 +47,6 @@
 #include "opcuacnc_nodemanagercnc.h"
 #include "userdatabase.h"
 
-#include "misc.h"
-
 #include <cstring>
 
 // Include type headers

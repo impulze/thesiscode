@@ -19,11 +19,11 @@
 
 #include "uagenericnodes.h"
 
-#include "adapter.h"
+#include "wrapper/adapter.h"
 
 #include "opcuadi_nodemanagerdevices.h"
-#include "models/opcuacnc_nodemanagercnc.h"
-#include "models/demo_nodemanagerdemo.h"
+#include "gen_models/opcuacnc_nodemanagercnc.h"
+#include "gen_models/demo_nodemanagerdemo.h"
 
 #include "xmldocument.h"
 
@@ -490,7 +490,7 @@ int OpcServerMain(const char* szAppPath)
 	pServer->addNodeManager(manager);
 
 {
-	const UaString sAdapterConfigFileName("/home/impulze/proto_opc/project_cpp/eckel/eckelcode/Wrapper/AdapterConfig.xml");
+	const UaString sAdapterConfigFileName("AdapterConfig.xml");
 	UaXmlDocument adapterConfigDocument(sAdapterConfigFileName.toUtf8());
 	adapter::xml_node_map_type adapterConfigNodes;
 
