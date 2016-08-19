@@ -1,0 +1,41 @@
+###########################
+# UaModeler Project File  #
+# Generated at 19.08.2016 #
+###########################
+
+PROJECTNAME = 3achsenemcnclaserschneid
+
+TEMPLATESET = ($TEMPLATES)/cpp/v1_5/t4/cpp_server.tt2set
+
+MODELS += ($MODELS)/Opc.Ua.NodeSet2.ua \
+    ($MODELS)/Opc.Ua.Di.NodeSet2.ua \
+    vdw_cnc.ua \
+    thesis_cnc.ua \
+    thesis_eckelmann_cnc.ua \
+    3achsenemcnclaserschneid.ua
+
+VARIABLES+= vdw_cnc.ua: CreateStringNodeIds=false; DllExportPrefix=UAMODELS; NamespaceName=CNC; NamespacePrefix=OpcUaCnc; \
+    thesis_cnc.ua: CreateStringNodeIds=false; DllExportPrefix=UAMODELS; NamespaceName=TCNC; NamespacePrefix=ThesisCNC; \
+    thesis_eckelmann_cnc.ua: CreateStringNodeIds=false; DllExportPrefix=UAMODELS; NamespaceName=ECNC; NamespacePrefix=EckelmannCNC; \
+    3achsenemcnclaserschneid.ua: CreateStringNodeIds=false; DllExportPrefix=UAMODELS; NamespaceName=Demo; NamespacePrefix=Demo; 
+
+COLORS = ($MODELS)/Opc.Ua.NodeSet2.ua: #0000ff\
+    ($MODELS)/Opc.Ua.Di.NodeSet2.ua: #0000ff\
+    vdw_cnc.ua: #0000ff\
+    thesis_cnc.ua: #0000ff\
+    thesis_eckelmann_cnc.ua: #0000ff\
+    3achsenemcnclaserschneid.ua: #0000ff
+
+OUTPUTPATH = ../code/models
+
+GENERATE += vdw_cnc.ua \
+    thesis_cnc.ua \
+    thesis_eckelmann_cnc.ua \
+    3achsenemcnclaserschneid.ua
+
+NODEACCESSINFOROLES += Administrator \
+    SecurityAdmin \
+    ConfigurationAdmin \
+    Operator \
+    Observer
+
