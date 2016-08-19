@@ -44,7 +44,7 @@
 
 #include "demo_nodemanagerdemobase.h"
 
-#include "wrapper/adapter.h"
+#include <adapter/adapter.h>
 
 #include <map>
 #include <memory>

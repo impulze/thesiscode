@@ -1,6 +1,8 @@
 #ifndef ADAPTER_H_INCLUDED
 #define ADAPTER_H_INCLUDED
 
+#include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <vector>
