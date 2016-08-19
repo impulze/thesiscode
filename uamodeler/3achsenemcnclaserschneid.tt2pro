@@ -26,7 +26,7 @@ COLORS = ($MODELS)/Opc.Ua.NodeSet2.ua: #0000ff\
     thesis_eckelmann_cnc.ua: #0000ff\
     3achsenemcnclaserschneid.ua: #0000ff
 
-OUTPUTPATH = ../code/models
+OUTPUTPATH = ../gen_models
 
 GENERATE += vdw_cnc.ua \
     thesis_cnc.ua \
