@@ -1,0 +1,25 @@
+###########################
+# UaModeler Project File  #
+# Generated at 19.08.2016 #
+###########################
+
+PROJECTNAME = VDW OPC UA CNC Information Model
+
+TEMPLATESET = ($TEMPLATES)/modeling/v1_0/t0/modeling.tt2set
+
+MODELS += ($MODELS)/Opc.Ua.NodeSet2.ua \
+    vdwcnc.ua
+
+COLORS = ($MODELS)/Opc.Ua.NodeSet2.ua: #0000ff\
+    vdwcnc.ua: #0000ff
+
+OUTPUTPATH = ../proto_opc/project_cpp/src/models
+
+GENERATE += vdwcnc.ua
+
+NODEACCESSINFOROLES += Administrator \
+    SecurityAdmin \
+    ConfigurationAdmin \
+    Operator \
+    Observer
+

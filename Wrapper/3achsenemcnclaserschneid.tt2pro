@@ -1,0 +1,43 @@
+###########################
+# UaModeler Project File  #
+# Generated at 19.08.2016 #
+###########################
+
+PROJECTNAME = 3AchsenEMCNCLaserSchneid
+
+TEMPLATESET = ($TEMPLATES)/cpp/v1_5/t4/cpp_server.tt2set
+
+MODELS += ($MODELS)/Opc.Ua.NodeSet2.ua \
+    ($MODELS)/Opc.Ua.Di.NodeSet2.ua \
+    3achsenemcnclaserschneid.ua \
+    vdwcnc.ua
+
+VARIABLES+= 3achsenemcnclaserschneid.ua: CreateStringNodeIds=false; DllExportPrefix=UAMODELS; NamespaceName=Demo; NamespacePrefix=Demo; \
+    vdwcnc.ua: CreateStringNodeIds=false; DllExportPrefix=UAMODELS; NamespaceName=CNC; NamespacePrefix=OpcUaCnc; 
+
+COLORS = ($MODELS)/Opc.Ua.NodeSet2.ua: #0000ff\
+    ($MODELS)/Opc.Ua.Di.NodeSet2.ua: #0000ff\
+    3achsenemcnclaserschneid.ua: #008000\
+    vdwcnc.ua: #0000ff
+
+OUTPUTPATH = code/models
+
+GENERATE += 3achsenemcnclaserschneid.ua \
+    vdwcnc.ua
+
+NODEACCESSINFOROLES += Administrator \
+    SecurityAdmin \
+    ConfigurationAdmin \
+    Operator \
+    Observer
+
+DEFAULTNODEIDS = DataType:3001\
+    Method:7001\
+    Object:5001\
+    ObjectType:1001\
+    ReferenceType:4001\
+    Variable:6001\
+    VariableType:2001\
+    View:8001
+
+
