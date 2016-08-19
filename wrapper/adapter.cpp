@@ -1,4 +1,4 @@
-#include "adapter.h"
+#include <adapter/adapter.h>
 #include "wrap_mmictrl.h"
 
 #include <condition_variable>
@@ -6,12 +6,18 @@
 #include <stdexcept>
 #include <thread>
 
+#ifdef WIN32
+#define snprintf sprintf_s
+#else
+#define snprintf std::snprintf
+#endif
+
 namespace
 {
 
 #ifdef WIN32
 struct my_local_control
-	: wrap::remote_control
+	: wrap::local_control
 {
 	template <class... T>
 	my_local_control(T &&... args);
@@ -253,7 +259,7 @@ void adapter::watch_node(xml_node_type const &node, xml_node_fetch_callback_type
 		pfield = node.children.at("value").at(0).children.at("pfield").at(0).value;
 	} catch (std::out_of_range const &) {
 		char exception_string[1024];
-		std::snprintf(exception_string, sizeof exception_string, "Node <%s> has no pfield, unable to watch.", node.browse_path.str().c_str());
+		snprintf(exception_string, sizeof exception_string, "Node <%s> has no pfield, unable to watch.", node.browse_path.str().c_str());
 
 		if (node.browse_path.last().str() == "cnc:ActGFunctions" ||
 		    node.browse_path.last().str() == "cnc:ActMainProgramLine" ||
@@ -279,7 +285,12 @@ void adapter::unwatch_node(xml_node_type const &node)
 
 void adapter::run()
 {
+#ifndef WIN32
 	typedef std::chrono::steady_clock clk;
+#else
+	typedef std::chrono::high_resolution_clock clk;
+#endif
+
 	typedef std::chrono::time_point<clk> timepoint;
 	clk::duration update_interval;
 
@@ -300,7 +311,8 @@ void adapter::run()
 	}
 #endif
 
-	timepoint last_update_try = clk::now() - update_interval;
+	timepoint last_update_try = clk::now();
+	last_update_try -= update_interval;
 
 	while (true) {
 		std::unique_lock<std::mutex> lock(impl_->mutex);
@@ -380,7 +392,7 @@ namespace
 
 #ifdef WIN32
 template <class... T>
-my_local_control::my_remote_control(T &&... args)
+my_local_control::my_local_control(T &&... args)
 	: wrap::local_control(std::forward<T>(args)...)
 {
 }

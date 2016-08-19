@@ -1,5 +1,6 @@
 #include "misc.h"
 
+#include <cstdint>
 #include <codecvt>
 #include <locale>
 #include <sstream>
@@ -28,7 +29,7 @@ std::string error_string_from_win32_error(DWORD win32_error)
 	//Free the buffer.
 	LocalFree(buffer);
 
-	using convert_type = std::codecvt_utf8<wchar_t>;
+	typedef std::codecvt_utf8<wchar_t> convert_type;
 	std::wstring_convert<convert_type, wchar_t> converter;
 
 	return converter.to_bytes(message);

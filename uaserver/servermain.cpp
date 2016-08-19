@@ -19,7 +19,7 @@
 
 #include "uagenericnodes.h"
 
-#include "wrapper/adapter.h"
+#include <adapter/adapter.h>
 
 #include "opcuadi_nodemanagerdevices.h"
 #include "gen_models/opcuacnc_nodemanagercnc.h"

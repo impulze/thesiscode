@@ -12,10 +12,10 @@
 #include "winsock2.h"
 
 #include "windows.h"
-#include "com_1st.h"
+#include <eckelmann/com_1st.h>
 #define MMI
-#include "com_def.h"
-#include "com_sbx.h"
+#include <eckelmann/com_def.h>
+#include <eckelmann/com_sbx.h>
 
 static bool g_run_server = true;
 

@@ -25,12 +25,14 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #define close_socket(fd) close(fd)
+#define snprintf std::snprintf
 typedef int socket_type;
 #else
 #include "string.h"
 #include "winsock2.h"
 #include "ws2tcpip.h"
 #define close_socket(sock) closesocket(sock)
+#define snprintf sprintf_s
 typedef SOCKET socket_type;
 #endif
 
@@ -247,7 +249,7 @@ std::string error_string_from_getaddrinfo_error(int error)
 	strm << "Error in 'getaddrinfo': ";
 	strm << gai_strerror(error);
 
-	using convert_type = std::codecvt_utf8<wchar_t>;
+	typedef std::codecvt_utf8<wchar_t> convert_type;
 	std::wstring_convert<convert_type, wchar_t> converter;
 
 	return converter.to_bytes(strm.str());
@@ -354,7 +356,7 @@ bool client_data::recv_bytes()
 		} else {
 			const std::string error_string = error_string_from_function_call("read", true);
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "While reading from <%s>:\n%s\n", address_string.c_str(), error_string.c_str());
+			snprintf(exception_string, sizeof exception_string, "While reading from <%s>:\n%s\n", address_string.c_str(), error_string.c_str());
 			throw std::runtime_error(exception_string);
 		}
 	}
@@ -400,7 +402,7 @@ void client_data::send_response(wrap::message const &message)
 
 			if (control_iterator != g_controls.end()) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Client already opened a CNC connection to <%s>.", name.c_str());
+				snprintf(exception_string, sizeof exception_string, "Client already opened a CNC connection to <%s>.", name.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -427,7 +429,7 @@ void client_data::send_response(wrap::message const &message)
 		case wrap::message_type::CTRL_CLOSE: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Unable to close non-existing CNC connection for client <%s>.", address_string.c_str());
+				snprintf(exception_string, sizeof exception_string, "Unable to close non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -450,7 +452,7 @@ void client_data::send_response(wrap::message const &message)
 		case wrap::message_type::CTRL_GET_INIT: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Unable to get state for non-existing CNC connection for client <%s>.", address_string.c_str());
+				snprintf(exception_string, sizeof exception_string, "Unable to get state for non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -473,7 +475,7 @@ void client_data::send_response(wrap::message const &message)
 		case wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Unable to load firmware for non-existing CNC connection for client <%s>.", address_string.c_str());
+				snprintf(exception_string, sizeof exception_string, "Unable to load firmware for non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -499,7 +501,7 @@ void client_data::send_response(wrap::message const &message)
 		case wrap::message_type::CTRL_SEND_FILE_BLOCKED: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Unable to send file to non-existing CNC connection for client <%s>.", address_string.c_str());
+				snprintf(exception_string, sizeof exception_string, "Unable to send file to non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -531,7 +533,7 @@ void client_data::send_response(wrap::message const &message)
 		case wrap::message_type::CTRL_READ_PARAM_ARRAY: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Unable to read param array for non-existing CNC connection for client <%s>.", address_string.c_str());
+				snprintf(exception_string, sizeof exception_string, "Unable to read param array for non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -725,7 +727,7 @@ server::server(std::string const &address, std::uint16_t port)
 
 	if (entries.size() == 0) {
 		char *buffer = new char[address.size() + 200];
-		const int result = std::snprintf(buffer, address.size() + 200, "No suitable socket addresses for <%s>:<%hu>\n", address.c_str(), port);
+		const int result = snprintf(buffer, address.size() + 200, "No suitable socket addresses for <%s>:<%hu>\n", address.c_str(), port);
 		const std::string buffer_cpp = buffer;
 		delete buffer;
 
@@ -873,7 +875,7 @@ client::client(std::string const &address, std::uint16_t port)
 
 	if (entries.size() == 0) {
 		char *buffer = new char[address.size() + 200];
-		const int result = std::snprintf(buffer, address.size() + 200, "No suitable socket addresses for <%s>:<%hu>\n", address.c_str(), port);
+		const int result = snprintf(buffer, address.size() + 200, "No suitable socket addresses for <%s>:<%hu>\n", address.c_str(), port);
 		const std::string buffer_cpp = buffer;
 		delete buffer;
 

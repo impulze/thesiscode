@@ -17,12 +17,14 @@
 #ifdef WIN32
 #include <windows.h>
 
-#include "com_1st.h"
+#define snprintf sprintf_s
+
+#include <eckelmann/com_1st.h>
 #define MMI
-#include "com_def.h"
+#include <eckelmann/com_def.h>
 #define _export
-#include "mmictrl.h"
-#include "com_sbx.h"
+#include <eckelmann/mmictrl.h>
+#include <eckelmann/com_sbx.h>
 
 #define MAKE_FUN_PTR_AND_VAR(name, ret, ...) \
 typedef ret (WINAPI * name ## _fun_ptr)(##__VA_ARGS__); \
@@ -33,6 +35,9 @@ name ## _p = reinterpret_cast<name ## _fun_ptr>(GetProcAddress(module, #name));
 
 #else
 #include <arpa/inet.h> // hto* functions
+
+#defne snprintf std::snprintf
+
 #endif
 
 #define MMIDBG(...) \
@@ -300,7 +305,7 @@ remote_control::remote_control(std::string const &name, std::string const &addre
 		} else {
 			const std::string error_string = response.extract_string(1);
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "CNC Connection to <%s> failed.\n%s\n", name.c_str(), error_string.c_str());
+			snprintf(exception_string, sizeof exception_string, "CNC Connection to <%s> failed.\n%s\n", name.c_str(), error_string.c_str());
 			throw std::runtime_error(exception_string);
 		}
 	} catch (...) {
@@ -346,7 +351,7 @@ bool remote_control::get_init_state()
 
 	const std::string error_string = response.extract_string(1);
 	char exception_string[1024];
-	std::snprintf(exception_string, sizeof exception_string, "CNC Getting state for <%s> failed.\n%s\n", impl_->name.c_str(), error_string.c_str());
+	snprintf(exception_string, sizeof exception_string, "CNC Getting state for <%s> failed.\n%s\n", impl_->name.c_str(), error_string.c_str());
 	throw std::runtime_error(exception_string);
 }
 
@@ -578,7 +583,7 @@ void check_server_error(wrap::client &client, wrap::message const &response)
 	if (response.type == wrap::message_type::SERVER_ERROR) {
 		const std::string error_string = response.extract_string(0);
 		char exception_string[1024];
-		std::snprintf(exception_string, sizeof exception_string, "A server error occured while handling client.\n%s", error_string.c_str());
+		snprintf(exception_string, sizeof exception_string, "A server error occured while handling client.\n%s", error_string.c_str());
 		throw std::runtime_error(exception_string);
 	}
 }
@@ -587,7 +592,7 @@ void check_correct_response_type(wrap::client &client, wrap::message const &resp
 {
 	if (response.type != type) {
 		char exception_string[1024];
-		std::snprintf(exception_string, sizeof exception_string, "Unexpected response type while handling client.\n");
+		snprintf(exception_string, sizeof exception_string, "Unexpected response type while handling client.\n");
 		throw std::runtime_error(exception_string);
 	}
 }
