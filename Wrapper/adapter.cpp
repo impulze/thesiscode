@@ -29,7 +29,7 @@ struct my_remote_control
 	void handle_message(wrap::callback_type_type type, unsigned long parameter) override;
 };
 
-void do_iterate_nodes(adapter::xml_node_map_type const &nodes, std::function<void(adapter::xml_node_type const &node)> callback);
+void do_iterate_nodes(adapter::xml_node_map_type const &nodes, std::function<bool(adapter::xml_node_type const &node)> callback);
 std::string get_attrs(adapter::xml_attribute_map_type const &attributes);
 void print_nodes(adapter::xml_node_map_type const &nodes, std::string space = "");
 
@@ -62,15 +62,62 @@ struct adapter::impl
 namespace adapter
 {
 
-xml_node_type::xml_node_type(std::string const &name, std::string const &browse_path)
+bool operator==(xml_node_browse_name const &first, xml_node_browse_name const &second)
+{
+	return first.ns == second.ns && first.name == second.name;
+}
+
+std::string xml_node_browse_name::str() const
+{
+	std::ostringstream strm;
+
+	// TODO: define prefixes in .xml?
+	if (ns == "http://opcfoundation.org/UA/") {
+		strm << "ua:";
+	} else if (ns == "http://opcfoundation.org/UA/CNC/") {
+		strm << "cnc:";
+	} else if (ns == "http://cs.hs-rm.de/mierswa_thesis/CNC/") {
+		strm << "thesis_cnc:";
+	} else if (ns == "http://cs.hs-rm.de/mierswa_thesis/Eckelmann/") {
+		strm << "eckelmann_cnc:";
+	} else if (ns == "http://cs.hs-rm.de/mierswa_thesis/3AchsenEMCNCLaserSchneid/") {
+		strm << "demo:";
+	} else {
+		strm << "UNKNOWN:";
+	}
+
+	strm << name;
+
+	return strm.str();
+}
+
+bool operator==(xml_node_browse_path const &first, xml_node_browse_path const &second)
+{
+	return first.elements == second.elements;
+}
+
+std::string xml_node_browse_path::str() const
+{
+	std::ostringstream strm;
+
+	for (auto const &element: elements) {
+		strm << "/";
+		strm << static_cast<std::string>(element);
+	}
+
+	return strm.str();
+}
+
+xml_node_type::xml_node_type(std::string const &name, xml_node_browse_path const &browse_path)
 	: name(name),
 	  browse_path(browse_path)
 {
 }
 
-std::string xml_node_type::get_browse_name() const
+#if 0
+std::string xml_node_type::get_browse_path() const
 {
-	const size_t dotpos = browse_path.rfind('.');
+	const size_t dotpos = browse_path.rfind(':');
 
 	if (dotpos == std::string::npos) {
 		return browse_path;
@@ -78,6 +125,7 @@ std::string xml_node_type::get_browse_name() const
 
 	return browse_path.substr(dotpos + 1);
 }
+#endif
 
 value::value(value_type type)
 	: type(type)
@@ -181,7 +229,7 @@ adapter::~adapter()
 	delete impl_;
 }
 
-void adapter::iterate_nodes(std::function<void(xml_node_type const &node)> const &callback) const
+void adapter::iterate_nodes(std::function<bool(xml_node_type const &node)> const &callback) const
 {
 	do_iterate_nodes(impl_->nodes, callback);
 }
@@ -197,7 +245,7 @@ void adapter::watch_node(xml_node_type const &node, xml_node_fetch_callback_type
 {
 	std::unique_lock<std::mutex> lock(impl_->mutex);
 
-	std::printf("watching node: %s\n", node.browse_path.c_str());
+	std::printf("watching node: %s\n", node.browse_path.str().c_str());
 
 	std::string pfield;
 
@@ -205,11 +253,11 @@ void adapter::watch_node(xml_node_type const &node, xml_node_fetch_callback_type
 		pfield = node.children.at("value").at(0).children.at("pfield").at(0).value;
 	} catch (std::out_of_range const &) {
 		char exception_string[1024];
-		std::snprintf(exception_string, sizeof exception_string, "Node <%s> has no pfield, unable to watch.", node.browse_path.c_str());
+		std::snprintf(exception_string, sizeof exception_string, "Node <%s> has no pfield, unable to watch.", node.browse_path.str().c_str());
 
-		if (node.get_browse_name() == "CNC:ActGFunctions" ||
-		    node.get_browse_name() == "CNC:ActMainProgramLine" ||
-		    node.get_browse_name() == "CNC:ActMainProgramFile") {
+		if (node.browse_path.last().str() == "cnc:ActGFunctions" ||
+		    node.browse_path.last().str() == "cnc:ActMainProgramLine" ||
+		    node.browse_path.last().str() == "cnc:ActMainProgramFile") {
 			return;
 		}
 
@@ -264,12 +312,12 @@ void adapter::run()
 		const timepoint now = clk::now();
 		const clk::duration diff = now - last_update_try;
 
-		printf("diff from last: %d\n", std::chrono::duration_cast<std::chrono::milliseconds>(diff).count());
+		printf("diff from last: %ld\n", std::chrono::duration_cast<std::chrono::milliseconds>(diff).count());
 
 		if (diff < update_interval) {
 			std::printf("Not stressing communication. Update is queued.\n");
 			std::this_thread::sleep_for(update_interval - diff);
-			std::printf("done sleeping: %d\n", std::chrono::duration_cast<std::chrono::milliseconds>(update_interval - diff).count());
+			std::printf("done sleeping: %ld\n", std::chrono::duration_cast<std::chrono::milliseconds>(update_interval - diff).count());
 		}
 
 		last_update_try = clk::now();
@@ -277,7 +325,7 @@ void adapter::run()
 		std::ostringstream strm;
 
 		for (auto const &entry: impl_->watched_nodes) {
-			strm << entry.first->browse_path;
+			strm << entry.first->browse_path.str();
 			strm << ",";
 		}
 
@@ -308,7 +356,7 @@ void adapter::run()
 			auto nit = impl_->watched_nodes.find(pit->second);
 
 			if (nit == impl_->watched_nodes.end()) {
-				std::printf("Node <%s> was removed during CNC communication. Discard value.\n", pit->second->browse_path.c_str());
+				std::printf("Node <%s> was removed during CNC communication. Discard value.\n", pit->second->browse_path.str().c_str());
 				continue;
 			}
 
@@ -355,7 +403,7 @@ void my_remote_control::handle_message(wrap::callback_type_type type, unsigned l
 	std::printf("new message: %d %lu\n", static_cast<int>(type), parameter);
 }
 
-void do_iterate_nodes(adapter::xml_node_map_type const &nodes, std::function<void(adapter::xml_node_type const &node)> callback)
+void do_iterate_nodes(adapter::xml_node_map_type const &nodes, std::function<bool(adapter::xml_node_type const &node)> callback)
 {
 	for (auto const &entry: nodes) {
 		if (entry.first != "object" && entry.first != "variable") {
@@ -363,7 +411,9 @@ void do_iterate_nodes(adapter::xml_node_map_type const &nodes, std::function<voi
 		}
 
 		for (auto const &node: entry.second) {
-			callback(node);
+			if (!callback(node)) {
+				return;
+			}
 
 			do_iterate_nodes(node.children, callback);
 		}

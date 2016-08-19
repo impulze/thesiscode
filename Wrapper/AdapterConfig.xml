@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	vim: ts=2
+-->
+<!--
+	generic adapter XML:
+
+	first node = configuration
+
+  <configuration>
+		child_nodes = position,remote_info,name,fetcher,object,variable
+		value = none
+
+		<position>
+			value = remote
+			        local
+
+		<remote_info> (only usable if position is remote
+			value = ip:port
+
+		<name>
+			value = name of the cnc machine to connect to
+
+		<fetcher>
+			value = name of the library to load if any value has kind=fetcher
+
+		<object>
+			attributes = browse_name=... [mandatory]
+			child nodes = object,variable
+			value = none
+
+		<variable>
+			attributes = browse_name=... [mandatory]
+			child nodes = value
+			value = none
+
+			<value>
+				attributes = kind=fix,fetcher,mirror [mandatory]
+				             unit=mm,mm/min [mandatory for AnalogItemType]
+				             range_start=... [mandatory for AnalogItemType]
+			  	           range_end=... [mandatory for AnalogItemType]
+				             mirror=... [mandatory for kind=mirror, must use full browse path (starting from Objects)]
+				             updated=on_start,interval [mandatory for kind=mirror or kind=fetcher]
+				             interval=time in ms [mdantory for updated=interval]
+				child nodes = none
+				value = value if kind=fix
+				        any if kind=fetcher used for initialization/default valu
+				        full browse path starting from Objects if kind=mirror
+
+
+	eckelmann adapter XML (additions in child nodes)
+
+		<configuration>
+			child nodes = minimum_communication_interval
+			value = none
+
+			<minimum_communication_interval>
+				value = minimum time in ms between communication
+
+			<variable>
+				<value>
+					child nodes = pfield
+
+					<pfield>
+						value = pfield index
+-->
+<configuration xmlns:ua="http://opcfoundation.org/UA/"
+               xmlns:vdw="http://opcfoundation.org/UA/CNC/"
+               xmlns:thesis_cnc="http://cs.hs-rm.de/mierswa_thesis/CNC/"
+               xmlns:eckelmann_cnc="http://cs.hs-rm.de/mierswa_thesis/Eckelmann/"
+               xmlns:demo="http://cs.hs-rm.de/mierswa_thesis/3AchsenEMCNCLaserSchneid/">
+
+	<!-- local cnc or remote cnc -->
+	<position>remote</position>
+
+	<!-- needed for remote cnc -->
+	<remote_info>10.0.0.138:44455</remote_info>
+
+	<!-- the cnc name -->
+	<name>CNC1</name>
+
+	<!-- communication interval required -->
+	<minimum_communication_interval>5000</minimum_communication_interval>
+
+	<!-- server entry -->
+	<!--<ua:object browse_name="Root">-->
+	<ua:object browse_name="Objects">
+
+	<!-- the data interface of a CNC machine -->
+	<vdw:object browse_name="CncInterface">
+	
+		<?ignore
+		<!-- file system entry point (not implemented yet) (optional) -->
+		<vdw:object browse_name="FileSystem"></vdw:object>
+		?>
+
+		<?ignore
+		<!-- bug fix version of VDW CNC companion specification [string] (optional) -->
+		<vdw:variable browse_name="Fix">
+			<value kind="fix">1</value>
+		</vdw:variable>
+		?>
+	
+		<!-- revision of VDW CNC companion specification [string] -->
+		<vdw:variable browse_name="Revision">
+			<value kind="fix">0</value>
+		</vdw:variable>
+	
+		<!-- vendor specific name [string] -->
+		<vdw:variable browse_name="VendorName">
+			<value kind="fix">Eckelmann AG</value>
+		</vdw:variable>
+	
+		<!-- vendor specific revision [string] -->
+		<vdw:variable browse_name="VendorRevision">
+			<value kind="fix">0</value>
+		</vdw:variable>
+	
+		<!-- version of VDW CNC companion specification [string] -->
+		<vdw:variable browse_name="Version">
+			<value kind="fix">0.9</value>
+		</vdw:variable>
+	
+		<!-- list of channels -->
+		<vdw:object browse_name="CncChannelList">
+	
+			<!-- first channel -->
+			<demo:object browse_name="Channel1">
+	
+				<!-- actual feedrate value [double] TODO: Vorschubgeschwindigkeit fehlt, N1 F*? -->
+				<vdw:variable browse_name="ActFeedrate">
+					<!-- range: 0-100 m/min -->
+					<value kind="fix" range_start="0" range_end="100000" unit="mm/min">0</value>
+				</vdw:variable>
+	
+				<!-- active g functions [uint32 array] TODO: Nicht alle vorhanden? -->
+				<vdw:variable browse_name="ActGFunctions">
+					<value kind="fetcher" updated="interval" interval="100"></value>
+				</vdw:variable>
+	
+				<!-- actual jog increment [double] (Schrittweite) -->
+				<vdw:variable browse_name="ActJogIncrement">
+					<!-- range: 0-1000 m -->
+					<value kind="fetcher" updated="interval" interval="1000" range_start="0" range_end="1000000" unit="mm">
+						<pfield><!--589-->673</pfield>
+					</value>
+				</vdw:variable>
+	
+				<!-- active CNC main program [string] -->
+				<vdw:variable browse_name="ActMainProgramFile">
+					<value kind="fetcher" updated="interval" interval="5000"></value>
+				</vdw:variable>
+	
+				<!-- active CNC main program offset [uint32] TODO: Programmoffsets fehlen -->
+				<vdw:variable browse_name="ActMainProgramFileOffset">
+					<value kind="fix">0</value>
+				</vdw:variable>
+	
+				<!-- active CNC main program line [string] -->
+				<vdw:variable browse_name="ActMainProgramLine">
+					<value kind="fetcher" updated="interval" interval="5000"></value>
+				</vdw:variable>
+	
+			</demo:object> <!-- end of channel -->
+	
+		</vdw:object> <!-- end of channel list -->
+	
+	</vdw:object> <!-- end of interface -->
+
+	<!--</ua:object>-->
+	</ua:object> <!-- end of server entry -->
+
+</configuration>
