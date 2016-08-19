@@ -44,6 +44,9 @@ static void sigint_handler(int signal_number)
 
 #endif
 
+namespace
+{
+
 struct my_remote_control
 	: wrap::remote_control
 {
@@ -52,6 +55,8 @@ struct my_remote_control
 
 	void handle_message(wrap::callback_type_type type, unsigned long parameter) override;
 };
+
+}
 
 int client_main(int argc, char **argv)
 {
@@ -114,6 +119,9 @@ int client_main(int argc, char **argv)
 	return 0;
 }
 
+namespace
+{
+
 template <class... T>
 my_remote_control::my_remote_control(T &&... args)
 	: wrap::remote_control(std::forward<T>(args)...)
@@ -123,4 +131,6 @@ my_remote_control::my_remote_control(T &&... args)
 void my_remote_control::handle_message(wrap::callback_type_type type, unsigned long parameter)
 {
 	std::printf("new message: %d %lu\n", static_cast<int>(type), parameter);
+}
+
 }
