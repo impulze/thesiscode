@@ -236,14 +236,28 @@ void local_control::send_file_blocked(std::string const &name, std::string const
 	throw_transfer_exception(result);
 }
 
-void local_control::send_message(MSG_TR *message)
+void local_control::send_message(transfer_message const &message)
 {
-	const BOOL result = ncrSendMessage_p(impl_->handle, message);
+	MSG_TR em_message;
+
+	em_message.sb0_uc = message.controlblock0;
+	em_message.sb1_uc = message.controlblock1;
+	em_message.sb2_uc = message.controlblock2;
+	em_message.handle_uc = message.handle;
+	em_message.index_uc = message.current_block_number;
+	em_message.len_us = message.length;
+	em_message.modul_uc = message.sender;
+
+	for (std::vector<transfer_message>::size_type i = 0; i < message.data.size(); i++) {
+		em_message.n.val_auc[i] = message.data[i];
+	}
+
+	const BOOL result = ncrSendMessage_p(impl_->handle, &em_message);
 
 	if (result == TRUE) {
 		return;
 	}
-
+	printf("Creating error\n");
 	throw error::create_error();
 }
 
@@ -402,7 +416,7 @@ void remote_control::send_file_blocked(std::string const &name, std::string cons
 	}
 }
 
-void remote_control::send_message(MSG_TR *message)
+void remote_control::send_message(transfer_message const &message)
 {
 /*
 	const BOOL result = ncrSendMessage_p(impl_->handle, message);

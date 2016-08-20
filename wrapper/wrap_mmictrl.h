@@ -9,9 +9,6 @@
 #include <string>
 #include <vector>
 
-// TODO:
-struct MSG_TR;
-
 namespace wrap
 {
 
@@ -175,6 +172,18 @@ struct transfer_exception_error
 #endif
 };
 
+struct transfer_message
+{
+	std::uint8_t controlblock0;
+	std::uint8_t controlblock1;
+	std::uint8_t controlblock2;
+	std::uint8_t current_block_number;
+	std::uint8_t sender;
+	std::uint8_t handle;
+	std::uint16_t length;
+	std::vector<std::uint8_t> data;
+};
+
 struct control
 {
 	// Öffnen der Standard-Steuerung
@@ -233,7 +242,7 @@ struct control
 
 	// Synchrone Funktion, um Nachrichten an die Steuerung zu senden
 	// Parameter: Nachrichten-Struktur
-	virtual void send_message(MSG_TR *message) = 0;
+	virtual void send_message(transfer_message const &message) = 0;
 
 	// Lese die Werte der angegebenen P-Feldindices aus dem Parameterfeld der Steuerung.
 	// Parameter: Parameters
@@ -278,7 +287,7 @@ struct local_control
 	virtual init_status load_firmware_blocked(std::string const &config_name) override;
 	virtual void send_file_blocked(std::string const &name, std::string const &header,
 	                               transfer_block_type type) override;
-	virtual void send_message(MSG_TR *message) override;
+	virtual void send_message(transfer_message const &message) override;
 	virtual void read_param_array(std::map<std::uint16_t, double> &parameters) override;
 	//virtual bool write_param_array(std::map<std::uint16_t, double> &parameters) override;
 
@@ -302,7 +311,7 @@ struct remote_control
 	virtual init_status load_firmware_blocked(std::string const &config_name) override;
 	virtual void send_file_blocked(std::string const &name, std::string const &header,
 	                               transfer_block_type type) override;
-	virtual void send_message(MSG_TR *message) override;
+	virtual void send_message(transfer_message const &message) override;
 	virtual void read_param_array(std::map<std::uint16_t, double> &parameters) override;
 	//virtual bool write_param_array(std::map<std::uint16_t, double> &parameters) override;
 
