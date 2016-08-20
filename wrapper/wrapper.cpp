@@ -2,6 +2,7 @@
 #include "wrap_mmictrl.h"
 
 #include <condition_variable>
+#include <cstring>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -11,6 +12,10 @@
 #else
 #define snprintf std::snprintf
 #endif
+
+// debug
+#include <bitset>
+#include <iostream>
 
 namespace
 {
@@ -40,6 +45,9 @@ struct my_remote_control
 namespace wrapper
 {
 
+typedef std::function<void(::adapter::xml_node_type const &, ::adapter::xml_node_fetch_info_type &)>
+	internal_function_callback_type;
+
 struct wrapper::impl
 {
 	impl(::adapter::xml_node_type const &configuration);
@@ -49,7 +57,7 @@ struct wrapper::impl
 	::adapter::xml_node_type configuration;
 	::adapter::xml_node_map_type nodes;
 	std::unique_ptr<wrap::control> ctrl;
-	std::map<::adapter::xml_node_type const *, ::adapter::xml_node_fetch_callback_type> watched_nodes;
+	std::map<::adapter::xml_node_type const *, internal_function_callback_type> watched_nodes;
 	std::map<std::uint16_t, ::adapter::xml_node_type const *> watched_pfields;
 	std::mutex mutex;
 	std::condition_variable condition;
@@ -166,28 +174,97 @@ void wrapper::watch_node(::adapter::xml_node_type const &node, ::adapter::xml_no
 {
 	std::unique_lock<std::mutex> lock(impl_->mutex);
 
-	std::printf("watching node: %s\n", node.browse_path.str().c_str());
+	const std::string browse_name = node.browse_path.last().str();
 
+	typedef ::adapter::xml_node_type const &ntype;
+	typedef ::adapter::xml_node_fetch_callback_type const &fcbtype;
+	typedef ::adapter::xml_node_fetch_info_type &fitype;
+
+	bool pfield_set = false;
 	std::string pfield;
 
 	try {
 		pfield = node.children.at("value").at(0).children.at("pfield").at(0).value;
+		pfield_set = true;
 	} catch (std::out_of_range const &) {
+	}
+
+	if (pfield_set) {
+		auto pfield_callback = [callback](ntype node, fitype fetch_info) {
+			// append size of double string
+			const std::uint32_t size = fetch_info.bytes.size();
+			std::uint8_t const *size_ptr = reinterpret_cast<std::uint8_t const *>(&size);
+			fetch_info.bytes.insert(fetch_info.bytes.begin(), size_ptr, size_ptr + 4);
+			callback(node, fetch_info);
+		};
+
+		impl_->watched_nodes[&node] = pfield_callback;
+		impl_->watched_pfields[static_cast<std::uint16_t>(std::stoi(pfield))] = &node;
+	} else if (node.browse_path.last().str() == "cnc:ActGFunctions") {
+		auto gfunc_callback = [callback](ntype node, fitype fetch_info) {
+			const std::string double_string(fetch_info.bytes.begin(), fetch_info.bytes.end());
+			const std::bitset<10> bits(std::stod(double_string));
+			std::vector<std::uint32_t> array;
+
+			if (bits[0]) {
+				array.push_back(31);
+			} else {
+				array.push_back(30);
+			}
+
+			if (bits[2]) {
+				array.push_back(133);
+			} else {
+				array.push_back(132);
+			}
+
+			if (bits[4]) {
+				array.push_back(114);
+			}
+
+			if (bits[5]) {
+				array.push_back(231);
+			}
+
+			if (bits[6]) {
+				array.push_back(217);
+			}
+
+			if (bits[8]) {
+				array.push_back(214);
+			}
+
+			if (bits[9]) {
+				array.push_back(233);
+			}
+
+			std::uint32_t array_size = array.size();
+
+			fetch_info.bytes.resize(4 + array.size() * 4);
+
+			std::memcpy(fetch_info.bytes.data(), &array_size, 4);
+
+			size_t current = 4;
+
+			for (auto const &element: array) {
+				std::memcpy(fetch_info.bytes.data() + current, &element, 4);
+				current += 4;
+			}
+
+			callback(node, fetch_info);
+		};
+
+		impl_->watched_nodes[&node] = gfunc_callback;
+		impl_->watched_pfields[559] = &node;
+	} else {
+		if (browse_name == "cnc:ActMainProgramFile") return;
+		//if (browse_name == "cnc:ActMainProgramLine") return;
+
 		char exception_string[1024];
-		snprintf(exception_string, sizeof exception_string, "Node <%s> has no pfield, unable to watch.", node.browse_path.str().c_str());
-
-		if (node.browse_path.last().str() == "cnc:ActGFunctions" ||
-		    node.browse_path.last().str() == "cnc:ActMainProgramLine" ||
-		    node.browse_path.last().str() == "cnc:ActMainProgramFile") {
-			return;
-		}
-
+		snprintf(exception_string, sizeof exception_string, "Node <%s> has no pfield and no custom code. Unable to watch.", node.browse_path.str().c_str());
 		throw std::runtime_error(exception_string);
 	}
 
-	std::printf("watching now\n");
-	impl_->watched_nodes[&node] = callback;
-	impl_->watched_pfields[static_cast<std::uint16_t>(std::stoi(pfield))] = &node;
 	impl_->condition.notify_one();
 }
 

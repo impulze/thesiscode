@@ -46,6 +46,7 @@ struct xml_node_type
 	std::string name;
 	std::string ns;
 	xml_node_browse_path browse_path;
+	//std::chrono::milliseconds cache_duration;
 };
 
 typedef xml_node_type::xml_node_map_type xml_node_map_type;

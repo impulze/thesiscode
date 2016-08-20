@@ -304,6 +304,7 @@ void NodeManagerDemo::check_objects_and_variables(OpcUa_NodeId *start_node, adap
 						setup_node(passed_node, ua_child_node);
 					} catch (std::exception const &) {
 						nodes_.erase(nodes_.find(&passed_node));
+						throw;
 					}
 
 					return false;
@@ -500,38 +501,161 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *ua_
 	std::printf("Node <%s> is set up.\n", node.browse_path.str().c_str());
 }
 
+namespace
+{
+
+template <class E>
+void create_ua_variable(std::uint8_t const *& data_position, E &element);
+
+template <class T>
+void set_ua_array(T &array, UaVariant &variant);
+
+template <class T>
+void assign_ua_array(std::uint8_t const *& data_position, UaVariant &variant)
+{
+	std::uint32_t size;
+	std::memcpy(&size, data_position, 4);
+
+	T array;
+
+	array.resize(size);
+
+	data_position += 4;
+
+	for (std::uint32_t i = 0; i < size; i++) {
+		create_ua_variable(data_position, array[i]);
+	}
+
+	set_ua_array(array, variant);
+}
+
+
+template <>
+void set_ua_array(UaStringArray &array, UaVariant &variant)
+{
+	variant.setStringArray(array);
+}
+
+template <>
+void set_ua_array(UaUInt32Array &array, UaVariant &variant)
+{
+	variant.setUInt32Array(array);
+}
+
+template <>
+void set_ua_array(UaDoubleArray &array, UaVariant &variant)
+{
+	variant.setDoubleArray(array);
+}
+
+template <class T>
+void set_ua_variable(T &variable, UaVariant &variant);
+
+
+template <class T>
+void assign_ua_variable(std::uint8_t const *& data_position, UaVariant &variant)
+{
+	T variable;
+	create_ua_variable(data_position, variable);
+
+	set_ua_variable(variable, variant);
+}
+
+template <>
+void set_ua_variable(OpcUa_String &variable, UaVariant &variant)
+{
+	variant.setString(variable);
+}
+
+template <>
+void set_ua_variable(OpcUa_UInt32 &variable, UaVariant &variant)
+{
+	variant.setUInt32(variable);
+}
+
+template <>
+void set_ua_variable(OpcUa_Double &variable, UaVariant &variant)
+{
+	variant.setDouble(variable);
+}
+
+template <>
+void create_ua_variable(std::uint8_t const *& data_position, OpcUa_String &string)
+{
+	std::uint32_t string_size;
+
+	std::memcpy(&string_size, data_position, 4);
+	const std::string temp_string(data_position + 4, data_position + 4 + string_size);
+
+	data_position += 4 + string_size;
+
+	UaString temp_ua_string(temp_string.c_str());
+	temp_ua_string.copyTo(&string);
+}
+
+template <>
+void create_ua_variable(std::uint8_t const *& data_position, OpcUa_UInt32 &element)
+{
+	std::uint32_t integer;
+	std::memcpy(&integer, data_position, 4);
+
+	data_position += 4;
+
+	element = integer;
+}
+
+template <>
+void create_ua_variable(std::uint8_t const *& data_position, OpcUa_Double &element)
+{
+	std::uint32_t double_string_size;
+
+	std::memcpy(&double_string_size, data_position, 4);
+
+	data_position += 4;
+
+	const std::string double_string(data_position, data_position + double_string_size);
+
+	data_position += double_string_size;
+
+	element = std::stod(double_string);
+}
+
+}
+
 void NodeManagerDemo::set_variable_from_node(adapter::xml_node_type const &node, UaVariable *variable, adapter::xml_node_fetch_info_type const &fetch_info)
 {
 	UaVariant variant;
 	const UaNodeId data_type = variable->dataType();
 	std::vector<std::uint8_t> const &bytes = fetch_info.bytes;
+	std::uint8_t const *data_position = bytes.data();
 
-	switch (data_type.identifierNumeric()) {
-		case OpcUaType_String: {
-			const std::string string(bytes.begin(), bytes.end());
-			variant.setString(string.c_str());
-			break;
-		}
+	bool converted = true;
+	const OpcUa_Int32 rank = variable->valueRank();
 
-		case OpcUaType_Double: {
-			const std::string double_string(bytes.begin(), bytes.end());
-			variant.setDouble(std::stod(double_string));
-			break;
+	if (rank == 1) {
+		switch (data_type.identifierNumeric()) {
+			case OpcUaId_String: assign_ua_array<UaStringArray>(data_position, variant); break;
+			case OpcUaId_UInt32: assign_ua_array<UaUInt32Array>(data_position, variant); break;
+			case OpcUaId_Double: assign_ua_array<UaDoubleArray>(data_position, variant); break;
+			default: converted = false; break;
 		}
-
-		case OpcUaType_UInt32: {
-			std::uint32_t number;
-			std::memcpy(&number, bytes.data(), 4);
-			variant.setUInt32(number);
-			break;
+	} else if (rank == -1) {
+		switch (data_type.identifierNumeric()) {
+			case OpcUaId_String: assign_ua_variable<OpcUa_String>(data_position, variant); break;
+			case OpcUaId_UInt32: assign_ua_variable<OpcUa_UInt32>(data_position, variant); break;
+			case OpcUaId_Double: assign_ua_variable<OpcUa_Double>(data_position, variant); break;
+			default: converted = false; break;
 		}
-
-		default: {
-			char exception_string[1024];
-			snprintf(exception_string, sizeof exception_string, "Cannot set value for node <%s>.", node.browse_path.str().c_str());
-			throw std::runtime_error(exception_string);
-		}
+	} else {
+		converted = false;
 	}
+
+	if (!converted) {
+		char exception_string[1024];
+		snprintf(exception_string, sizeof exception_string, "Node <%s> value cannot be converted [Rank: %d, Datatype: %u].", node.browse_path.str().c_str(), rank, data_type.identifierNumeric());
+ 		throw std::runtime_error(exception_string);
+	}
+
 
 	UaDataValue data_value;
 	data_value.setValue(variant, OpcUa_True, OpcUa_True);

@@ -80,7 +80,7 @@
 	<name>CNC1</name>
 
 	<!-- communication interval required -->
-	<minimum_communication_interval>5000</minimum_communication_interval>
+	<minimum_communication_interval>500</minimum_communication_interval>
 
 	<!-- server entry -->
 	<!--<ua:object browse_name="Root">-->
@@ -158,7 +158,9 @@
 
 				<!-- active CNC main program line [string] -->
 				<vdw:variable browse_name="ActMainProgramLine">
-					<value kind="fetcher" updated="interval" interval="5000"></value>
+					<value kind="fetcher" updated="interval" interval="5000">
+						<pfield>560</pfield>
+					</value>
 				</vdw:variable>
 
 			</demo:object> <!-- end of channel -->
