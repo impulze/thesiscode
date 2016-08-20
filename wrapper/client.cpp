@@ -3,12 +3,14 @@
 #include "wrap_protocol.h"
 
 #include <cmath>
+#include <cstring>
 
 #ifdef WIN32
 #include <winsock2.h>
 #include <windows.h>
 #else
 #include <unistd.h>
+#include <arpa/inet.h>
 #endif
 
 #if 0
@@ -85,6 +87,19 @@ int client_main(int argc, char **argv)
 		printf("send file\n");
 		ctrl.send_file_blocked("C:\\Eckelmann\\StdHMI\\log\\vom_nc.mk", "", wrap::transfer_block_type::MASCHINENKONSTANTEN);
 		printf("done\n");
+
+		wrap::transfer_message msg = wrap::transfer_message();
+
+		msg.controlblock0 = 3;
+		msg.controlblock1 = 21;
+		msg.data.resize(4);
+
+		std::uint32_t prognum = htonl(0);
+
+		std::memcpy(msg.data.data(), &prognum, 4);
+
+		ctrl.send_message(msg);
+
 		std::map<std::uint16_t, double> parameters;
 		for (int i = 0; i < 1024; i++) {
 			parameters[i] = 0;

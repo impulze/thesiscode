@@ -568,6 +568,46 @@ void client_data::send_response(wrap::message const &message)
 			break;
 		}
 
+		case wrap::message_type::CTRL_SEND_MESSAGE: {
+			if (control_iterator == g_controls.end()) {
+				char exception_string[1024];
+				snprintf(exception_string, sizeof exception_string, "Unable to send message to non-existing CNC connection for client <%s>.", address_string.c_str());
+				throw std::runtime_error(exception_string);
+			}
+
+			wrap::transfer_message msg;
+
+			const std::uint16_t size = message.extract_bit16(0);
+
+			msg.controlblock0 = message.extract_bit8(2);
+			msg.controlblock1 = message.extract_bit8(3);
+			msg.controlblock2 = message.extract_bit8(4);
+			msg.current_block_number = message.extract_bit8(5);
+			msg.sender = message.extract_bit8(6);
+			msg.handle = message.extract_bit8(7);
+
+			std::uint16_t position = 8;
+
+			for (std::uint16_t i = 0; i < size - 8; i++) {
+				msg.data.push_back(message.extract_bit8(position++));
+			}
+
+			response.reset(new wrap::message(wrap::message_type::CTRL_SEND_MESSAGE_RESPONSE));
+
+			try {
+				control_iterator->second->send_message(msg);
+			} catch (wrap::error const &error) {
+				response->append(static_cast<std::uint8_t>(1));
+				response->append(error.what());
+				response->append(error.win32_error);
+				break;
+			}
+
+			response->append(static_cast<std::uint8_t>(0));
+
+			break;
+		}
+
 #endif
 		default:
 			response.reset(new wrap::message(wrap::message_type::OK));

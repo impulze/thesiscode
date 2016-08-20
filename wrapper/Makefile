@@ -11,10 +11,11 @@ libs: lib/libwrapper.a
 lib/libwrapper.a: $(BASE_OBJECTS_PATHS)
 	$(AR) rcs $@ $^
 
+client: $(BASE_OBJECTS_PATHS) objs/main.o objs/client.o $(ADAPTER_DIR)/lib/libadapter.a
+	$(LINK.o) $^ $(LOADLIBES) $(LDLIBS) -o $@
+
 objs/%.o: %.cpp
 	$(COMPILE.cpp) $(OUTPUT_OPTION) $<
-
-client: $(BASE_OBJECTS_PATHS) objs/client.o
 
 objs/wrap_mmictrl.o: wrap_communication.h wrap_protocol.h wrap_mmictrl.h
 objs/wrap_communication.o: wrap_communication.h wrap_protocol.h wrap_mmictrl.h misc.h

@@ -24,44 +24,10 @@ struct error
 	const std::uint32_t win32_error;
 };
 
-struct transfer_type
-{
-	// Warten auf Abschluss der Dateiübertragung
-	std::int32_t wait();
-};
-
-struct expression_error_info
-{
-	std::string const &expression; // Der fehlerhafte Ausdruck
-	std::size_t index; // Index der fehlerhaften Stelle
-};
-
 enum class init_status
 {
 	FIRMWARE_LOADED,
 	FIRMWARE_ALREADY_LOADED
-};
-
-struct can_object_desc_tr_type
-{
-	std::shared_ptr<can_object_desc_tr_type> next; // Pointer to next description
-	std::uint16_t obj_idx; // CANopen object index
-	std::uint8_t sub_idx; // CANopen sub index
-	std::uint8_t node_id; // CANopen node ID
-	std::int32_t max_size; // maximum size of the objects in bytes
-	std::vector<std::uint8_t> data; // buffer for storing the data bytes in object
-	std::int32_t result; // bytes transferred or error code if < 0
-	std::uint32_t abort_code; // SDO abort code if available
-};
-
-struct can_transfer_state_tr_type
-{
-	std::string function_name; // Name der aktuell ausgeführten Funktion
-	std::uint32_t number_of_objects; // Anzahl der zu übertragenden Objekten
-	std::uint32_t size_of_objects; // Gesamtgröße aller zu übertragenden Objekten in Bytes
-	std::uint32_t transferred_objects; // Anzahl der bereits übertragenden Objekten
-	std::uint32_t transferred_size; // Größe der bereits übertragenden Objekten in Bytes
-	std::shared_ptr<can_object_desc_tr_type> act_object; // aktuelles Objekt
 };
 
 enum class callback_type_type
@@ -180,7 +146,6 @@ struct transfer_message
 	std::uint8_t current_block_number;
 	std::uint8_t sender;
 	std::uint8_t handle;
-	std::uint16_t length;
 	std::vector<std::uint8_t> data;
 };
 

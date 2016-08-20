@@ -60,18 +60,30 @@ MAKE_FUN_PTR_AND_VAR(ncrSendFileBlocked, LONG, HANDLE, LPCSTR, LPCSTR, LONG)
 MAKE_FUN_PTR_AND_VAR(ncrSendMessage, BOOL, HANDLE, MSG_TR *)
 MAKE_FUN_PTR_AND_VAR(ncrReadParamArray, BOOL, HANDLE, WORD *, double *, WORD)
 
-static bool g_dll_loaded;
+namespace
+{
 
-static std::map<LPVOID, wrap::control *> g_control_mapping;
-static void WINAPI callback(ULONG type, ULONG param, LPVOID context);
-static void load_cnc_dlls();
-static void throw_transfer_exception(LONG result);
-static LONG block_type_conversion(wrap::transfer_block_type type);
-static wrap::callback_type_type conversion_callback_type_type(LONG type);
+bool g_dll_loaded;
+std::map<LPVOID, wrap::control *> g_control_mapping;
+
+void WINAPI callback(ULONG type, ULONG param, LPVOID context);
+void load_cnc_dlls();
+void throw_transfer_exception(LONG result);
+LONG block_type_conversion(wrap::transfer_block_type type);
+wrap::callback_type_type conversion_callback_type_type(LONG type);
+void eckelmann_cpp_to_msg(wrap::transfer_message const &message, MSG_TR *em_message);
+
+}
 #endif
 
-static void check_server_error(wrap::client &client, wrap::message const &response);
-static void check_correct_response_type(wrap::client &client, wrap::message const &response, wrap::message_type type);
+namespace
+{
+
+void check_server_error(wrap::client &client, wrap::message const &response);
+void check_correct_response_type(wrap::client &client, wrap::message const &response, wrap::message_type type);
+void eckelmann_msg_to_cpp(unsigned long param, wrap::transfer_message const &message);
+
+}
 
 namespace wrap
 {
@@ -245,11 +257,30 @@ void local_control::send_message(transfer_message const &message)
 	em_message.sb2_uc = message.controlblock2;
 	em_message.handle_uc = message.handle;
 	em_message.index_uc = message.current_block_number;
-	em_message.len_us = message.length;
+	em_message.len_us = message.data.size();
 	em_message.modul_uc = message.sender;
 
-	for (std::vector<transfer_message>::size_type i = 0; i < message.data.size(); i++) {
-		em_message.n.val_auc[i] = message.data[i];
+	switch (msg.controlblock0) {
+		case SB0_AUFTRAG_KUC:
+			break;
+		default:
+			throw std::runtime_error("Only SB0_AUFTRAG_KUC messages supported.");
+	}
+
+	if (msg.controlblock1 == SB1_GET_PROGNAME_KUC) {
+		if (msg.data.size() != 4) {
+			throw std::runtime_error("Invalid length for SB1_GET_PROGNAME_KUC.");
+		}
+
+		std::uint32_t num;
+
+		std::memcpy(&num, msg.data.data(), 4);
+
+		num = ntohl(num);
+
+		em_message.val_aul[0] = num;
+	} else {
+		throw std::runtime_error("Only SB1_GET_PROGNAME_KUC messages supported.");
 	}
 
 	const BOOL result = ncrSendMessage_p(impl_->handle, &em_message);
@@ -257,7 +288,7 @@ void local_control::send_message(transfer_message const &message)
 	if (result == TRUE) {
 		return;
 	}
-	printf("Creating error\n");
+
 	throw error::create_error();
 }
 
@@ -418,16 +449,35 @@ void remote_control::send_file_blocked(std::string const &name, std::string cons
 
 void remote_control::send_message(transfer_message const &message)
 {
-/*
-	const BOOL result = ncrSendMessage_p(impl_->handle, message);
+	wrap::message com_message(wrap::message_type::CTRL_SEND_MESSAGE);
 
-	if (result == TRUE) {
+	// HACK: internal message handling here
+	com_message.append(static_cast<std::uint16_t>(6 + message.data.size()));
+
+	com_message.append(message.controlblock0);
+	com_message.append(message.controlblock1);
+	com_message.append(message.controlblock2);
+	com_message.append(message.current_block_number);
+	com_message.append(message.sender);
+	com_message.append(message.handle);
+
+	for (auto const &element: message.data) {
+		com_message.append(element);
+	}
+
+	wrap::message response = impl_->client->send_message(com_message, 5000);
+
+	check_server_error(*(impl_->client), response);
+	check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_SEND_MESSAGE_RESPONSE);
+
+	if (response.contents[0] == 0) {
 		return;
 	}
 
-	throw error::create_error();
-*/
-	throw;
+	const std::string error_string = response.extract_string(1);
+	char exception_string[1024];
+	snprintf(exception_string, sizeof exception_string, "CNC Sending message to <%s> failed.\n%s\n", impl_->name.c_str(), error_string.c_str());
+	throw std::runtime_error(exception_string);
 }
 
 void remote_control::read_param_array(std::map<std::uint16_t, double> &parameters)
@@ -463,6 +513,9 @@ void remote_control::read_param_array(std::map<std::uint16_t, double> &parameter
 }
 
 #ifdef WIN32
+namespace
+{
+
 void WINAPI callback(ULONG type, ULONG param, LPVOID context)
 {
 	for (auto &entry: g_control_mapping) {
@@ -591,7 +644,17 @@ wrap::callback_type_type conversion_callback_type_type(LONG type)
 	throw std::runtime_error("Assertion.");
 }
 
+void eckelmann_cpp_to_msg(wrap::transfer_message const &message, MSG_TR *em_message)
+{
+	throw;
+}
+
+}
+
 #endif
+
+namespace
+{
 
 void check_server_error(wrap::client &client, wrap::message const &response)
 {
@@ -610,4 +673,6 @@ void check_correct_response_type(wrap::client &client, wrap::message const &resp
 		snprintf(exception_string, sizeof exception_string, "Unexpected response type while handling client.\n");
 		throw std::runtime_error(exception_string);
 	}
+}
+
 }
