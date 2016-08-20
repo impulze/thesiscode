@@ -49,6 +49,14 @@
 
 #include <cstring>
 
+#undef snprintf
+
+#ifdef WIN32
+#define snprintf sprintf_s
+#else
+#define snprintf std::snprintf
+#endif
+
 // Include type headers
 
 namespace
@@ -270,7 +278,7 @@ UaStatus NodeManagerDemo::afterStartUp()
 			uaNodeId = nodes_.at(&node);
 		} catch (std::out_of_range const &) {
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "Node <%s> not present in address space.", node.browse_path.str().c_str());
+			snprintf(exception_string, sizeof exception_string, "Node <%s> not present in address space.", node.browse_path.str().c_str());
 			throw std::runtime_error(exception_string);
 		}
 
@@ -282,7 +290,7 @@ UaStatus NodeManagerDemo::afterStartUp()
 
 		try {
 			setup_node(node, uaNode);
-		} catch (std::exception const &exception) {
+		} catch (std::exception const &) {
 			uaNode->releaseReference();
 			throw;
 		}
@@ -324,7 +332,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 			uaVar = dynamic_cast<UaVariable *>(uaNode);
 		} catch (std::bad_cast const &) {
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "Node <%s> is not a variable in address space.", node.browse_path.str().c_str());
+			snprintf(exception_string, sizeof exception_string, "Node <%s> is not a variable in address space.", node.browse_path.str().c_str());
 			throw std::runtime_error(exception_string);
 		}
 
@@ -334,7 +342,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 			value_node.reset(new adapter::xml_node_type(node.children.at("value")[0]));
 		} catch (std::out_of_range const &) {
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "Node <%s> is missing value child node.", node.browse_path.str().c_str());
+			snprintf(exception_string, sizeof exception_string, "Node <%s> is missing value child node.", node.browse_path.str().c_str());
 			throw std::runtime_error(exception_string);
 		}
 
@@ -344,14 +352,14 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 			kind = value_node->attributes.at("kind");
 		} catch (std::out_of_range const &) {
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "Node <%s> is missing kind attribute in value.", node.browse_path.str().c_str());
+			snprintf(exception_string, sizeof exception_string, "Node <%s> is missing kind attribute in value.", node.browse_path.str().c_str());
 			throw std::runtime_error(exception_string);
 		}
 
 		if (kind == "fix") {
 			if (value_node->value.empty()) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Node <%s> has empty fixed value.", node.browse_path.str().c_str());
+				snprintf(exception_string, sizeof exception_string, "Node <%s> has empty fixed value.", node.browse_path.str().c_str());
 				throw std::runtime_error(exception_string);
 			}
 		}
@@ -375,7 +383,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 				range_end = value_node->attributes.at("range_end");
 			} catch (std::out_of_range const &) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Node <%s> is missing attributes for AnalogItemType.", node.browse_path.str().c_str());
+				snprintf(exception_string, sizeof exception_string, "Node <%s> is missing attributes for AnalogItemType.", node.browse_path.str().c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -389,7 +397,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 				unit_info = UaEUInformation::fromUnitId(UaEUInformation::EngineeringUnit_millimetre);
 			} else {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Node <%s> unit <%s> cannot be setup in UA server.", node.browse_path.str().c_str(), unit.c_str());
+				snprintf(exception_string, sizeof exception_string, "Node <%s> unit <%s> cannot be setup in UA server.", node.browse_path.str().c_str(), unit.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -420,7 +428,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 
 			if (!value_converted) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Node <%s> has unknown conversion for fix value <%s>", node.browse_path.str().c_str(), dataType.toFullString().toUtf8());
+				snprintf(exception_string, sizeof exception_string, "Node <%s> has unknown conversion for fix value <%s>", node.browse_path.str().c_str(), dataType.toFullString().toUtf8());
 				throw std::runtime_error(exception_string);
 			}
 		} else if (kind == "fetcher") {
@@ -430,7 +438,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 				updated = value_node->attributes.at("updated");
 			} catch (std::out_of_range const &) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Node <%s> is missing updated attribute in value.", node.browse_path.str().c_str());
+				snprintf(exception_string, sizeof exception_string, "Node <%s> is missing updated attribute in value.", node.browse_path.str().c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -442,7 +450,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 				adapter_->watch_node(node, callback);
 			} else {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Node <%s> has unknown updated attribute in value.", node.browse_path.str().c_str());
+				snprintf(exception_string, sizeof exception_string, "Node <%s> has unknown updated attribute in value.", node.browse_path.str().c_str());
 				throw std::runtime_error(exception_string);
 			}
 		} else if (kind == "mirror") {
@@ -453,7 +461,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 				mirrored_browse_path = value_node->attributes.at("browse_path");
 			} catch (std::out_of_range const &) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Node <%s> is missing browse_path attribute in value.", node.browse_path.str().c_str());
+				snprintf(exception_string, sizeof exception_string, "Node <%s> is missing browse_path attribute in value.", node.browse_path.str().c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -465,7 +473,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 
 			if (mirrored_node == NULL) {
 				char exception_string[1024];
-				std::snprintf(exception_string, sizeof exception_string, "Node <%s> cannot be mirrored because <%s> is not setup.", node.browse_path.str().c_str(), mirrored_browse_path.c_str());
+				snprintf(exception_string, sizeof exception_string, "Node <%s> cannot be mirrored because <%s> is not setup.", node.browse_path.str().c_str(), mirrored_browse_path.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
@@ -473,7 +481,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 			mirrored_nodes_[mirrored_node] = &node;
 		} else {
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "Node <%s> has unknown updated attribute in value.", node.browse_path.str().c_str());
+			snprintf(exception_string, sizeof exception_string, "Node <%s> has unknown updated attribute in value.", node.browse_path.str().c_str());
 			throw std::runtime_error(exception_string);
 		}
 
@@ -513,7 +521,7 @@ void NodeManagerDemo::set_variable_from_node(adapter::xml_node_type const &node,
 
 		default: {
 			char exception_string[1024];
-			std::snprintf(exception_string, sizeof exception_string, "Cannot set value for node <%s>.", node.browse_path.str().c_str());
+			snprintf(exception_string, sizeof exception_string, "Cannot set value for node <%s>.", node.browse_path.str().c_str());
 			throw std::runtime_error(exception_string);
 		}
 	}

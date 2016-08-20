@@ -71,7 +71,7 @@
                xmlns:demo="http://cs.hs-rm.de/mierswa_thesis/3AchsenEMCNCLaserSchneid/">
 
 	<!-- local cnc or remote cnc -->
-	<position>remote</position>
+	<position>local</position>
 
 	<!-- needed for remote cnc -->
 	<remote_info>10.0.0.138:44455</remote_info>

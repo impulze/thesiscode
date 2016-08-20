@@ -27,6 +27,7 @@
 
 #include "xmldocument.h"
 
+#include <stdexcept>
 #include <string>
 
 static adapter::xml_node_type add_node(UaXmlDocument &document, std::string const &name, adapter::xml_node_type *parent = NULL);
@@ -462,14 +463,21 @@ int OpcServerMain(const char* szAppPath)
     if ( ret == 0 )
     {
         // Create configuration file name
-        UaString sConfigFileName(szAppPath);
-
-#if SUPPORT_XML_PARSER
-        sConfigFileName += "/ServerConfig.xml";
+#ifdef SERVER_ALTERNATE_CONFIG_PATH
+	#if SUPPORT_XML_PARSER
+		const UaString sConfigFileName(SERVER_ALTERNATE_CONFIG_PATH "/ServerConfig.xml");
+	#else
+		const UaString sConfigFileName(SERVER_ALTERNATE_CONFIG_PATH "/ServerConfig.ini");
+	#endif
 #else
-        sConfigFileName += "/ServerConfig.ini";
-#endif
+		UaString sConfigFileName(szAppPath);
 
+	#if SUPPORT_XML_PARSER
+        sConfigFileName += "/ServerConfig.xml";
+	#else
+        sConfigFileName += "/ServerConfig.ini";
+	#endif
+#endif
 
         //- Start up OPC server ---------------------
         // This code can be integrated into a startup
@@ -478,7 +486,7 @@ int OpcServerMain(const char* szAppPath)
         //-------------------------------------------
         // Create and initialize server object
         OpcServer* pServer = new OpcServer;
-        pServer->setServerConfig(sConfigFileName, szAppPath);
+		pServer->setServerConfig(sConfigFileName, szAppPath);
 
 	NodeManager *manager;
 	UaServerApplicationModule *module;
@@ -490,7 +498,12 @@ int OpcServerMain(const char* szAppPath)
 	pServer->addNodeManager(manager);
 
 {
+#ifdef ADAPTER_ALTERNATE_CONFIG_PATH
+	const UaString sAdapterConfigFileName(ADAPTER_ALTERNATE_CONFIG_PATH "/AdapterConfig.xml");
+#else
 	const UaString sAdapterConfigFileName("AdapterConfig.xml");
+#endif
+
 	UaXmlDocument adapterConfigDocument(sAdapterConfigFileName.toUtf8());
 	adapter::xml_node_map_type adapterConfigNodes;
 
@@ -513,7 +526,6 @@ int OpcServerMain(const char* szAppPath)
 	}
 
 	std::shared_ptr<adapter::adapter> adapter(new adapter::adapter(adapterConfigNodes));
-
 	manager = new Demo::NodeManagerDemo(adapter, OpcUa_True);
 	pServer->addNodeManager(manager);
 }
@@ -565,7 +577,6 @@ int OpcServerMain(const char* szAppPath)
         //-------------------------------------------
 
 
-        
         if ( ret == 0 )
         {
 #if !defined(USE_XML_1)

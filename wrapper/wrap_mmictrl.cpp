@@ -167,8 +167,9 @@ local_control::local_control(std::string const &name)
 		load_cnc_dlls();
 		g_dll_loaded = true;
 	}
-
+	printf("test\n");
 	HANDLE handle = ncrOpenControl_p(name.c_str(), ::callback, this);
+	printf("molk\n");
 
 	if (handle == INVALID_HANDLE_VALUE) {
 		throw error::create_error();
