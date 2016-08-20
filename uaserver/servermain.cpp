@@ -30,6 +30,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <wrapper/wrapper.h>
+
 static adapter::xml_node_type add_node(UaXmlDocument &document, std::string const &name, adapter::xml_node_type *parent = NULL);
 
 class MyNodeManagerNodeSetXmlCreator;
@@ -525,7 +527,7 @@ int OpcServerMain(const char* szAppPath)
 		}
 	}
 
-	std::shared_ptr<adapter::adapter> adapter(new adapter::adapter(adapterConfigNodes));
+	std::shared_ptr<adapter::adapter> adapter(new wrapper::wrapper(adapterConfigNodes));
 	manager = new Demo::NodeManagerDemo(adapter, OpcUa_True);
 	pServer->addNodeManager(manager);
 }

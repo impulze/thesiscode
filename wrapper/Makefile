@@ -1,23 +1,21 @@
-CXXFLAGS = -ggdb3 -std=c++11 -fPIC -D_GLIBCXX_USE_CXX11_ABI=0 -Iinclude
-BASE_OBJECTS = wrap_communication.o wrap_protocol.o wrap_mmictrl.o misc.o adapter.o
+ADAPTER_DIR = ../adapter
+CXXFLAGS = -ggdb3 -std=c++11 -fPIC -D_GLIBCXX_USE_CXX11_ABI=0 -I$(ADAPTER_DIR)/include -Iinclude
+BASE_OBJECTS = wrap_communication.o wrap_protocol.o wrap_mmictrl.o misc.o wrapper.o
 BASE_OBJECTS_PATHS := $(addprefix objs/, $(BASE_OBJECTS))
 LINK.o = $(CXX) $(LDFLAGS) $(TARGET_ARCH)
 
 all: libs
 
-objs:
-	mkdir objs
+libs: lib/libwrapper.a
+
+lib/libwrapper.a: $(BASE_OBJECTS_PATHS)
+	$(AR) rcs $@ $^
 
 objs/%.o: %.cpp
 	$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 client: $(BASE_OBJECTS_PATHS) objs/client.o
-libs: lib/libadapter.so
 
-lib/libadapter.so: $(BASE_OBJECTS_PATHS)
-	$(LINK.o) -shared -o $@ $^
-
-objs/adapter.o: include/adapter/adapter.h wrap_mmictrl.h
 objs/wrap_mmictrl.o: wrap_communication.h wrap_protocol.h wrap_mmictrl.h
 objs/wrap_communication.o: wrap_communication.h wrap_protocol.h wrap_mmictrl.h misc.h
 objs/wrap_protocol.o: wrap_protocol.h

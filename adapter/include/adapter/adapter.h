@@ -59,36 +59,18 @@ struct xml_node_fetch_info_type
 
 typedef std::function<void(xml_node_type const &node, xml_node_fetch_info_type const &fetch_info)> xml_node_fetch_callback_type;
 
-enum class value_type
-{
-	DATA_ITEM,
-	ANALOG_ITEM,
-	PROPERTY,
-	CNC_POSITION_VARIABLE,
-};
-
-struct value
-{
-	value(value_type type);
-
-	const value_type type;
-};
-
 struct adapter
 {
 	adapter(xml_node_map_type const &nodes);
 	virtual ~adapter();
 
 	void iterate_nodes(std::function<bool(xml_node_type const &node)> const &callback) const;
-	std::shared_ptr<value> get_value_for_browse_path(std::string const &browse_path);
-	void watch_node(xml_node_type const &node, xml_node_fetch_callback_type const &callback);
-	void unwatch_node(xml_node_type const &node);
-	void run();
+	virtual void watch_node(xml_node_type const &node, xml_node_fetch_callback_type const &callback) = 0;
+	virtual void unwatch_node(xml_node_type const &node) = 0;
+	virtual void run() = 0;
 
-private:
-	struct impl;
-
-	impl *impl_;
+protected:
+	xml_node_map_type const nodes_;
 };
 
 }
