@@ -36,7 +36,7 @@ name ## _p = reinterpret_cast<name ## _fun_ptr>(GetProcAddress(module, #name));
 #else
 #include <arpa/inet.h> // hto* functions
 
-#defne snprintf std::snprintf
+#define snprintf std::snprintf
 
 #endif
 

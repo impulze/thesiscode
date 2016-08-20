@@ -7,13 +7,13 @@ find_package(UaLibXml2)
 
 set(UASDK_BASE_DIR "/home/impulze/install/build/sdk")
 
-set(ADAPTER_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/..")
-set(ADAPTER_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../wrapper")
+set(ADAPTER_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../wrapper/include")
+set(ADAPTER_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../wrapper/lib")
 set(ADAPTER_LIBRARIES "adapter")
 
-set(MODELS_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/..")
-file(GLOB MODELS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../gen_models/*.cpp")
-file(GLOB MODELS_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/../gen_models/*.h")
+set(MODELS_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../models")
+file(GLOB MODELS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../models/gen_models/*.cpp")
+file(GLOB MODELS_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/../models/gen_models/*.h")
 
 include(MessageUtils)
 include(ConfigureCompiler)
