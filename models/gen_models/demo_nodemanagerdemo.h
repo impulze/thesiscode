@@ -43,6 +43,7 @@
 #define _DEMO_NODEMANAGERDEMO_H__
 
 #include "demo_nodemanagerdemobase.h"
+#include "nodemanagerroot.h"
 
 #include <adapter/adapter.h>
 
@@ -72,6 +73,8 @@ public:
     virtual UaStatus   beforeShutDown();
     //- Interface NodeManagerUaNode -------------------------------------------------------
 
+    void add_general_model_change_event(UaNode *node);
+    void check_objects_and_variables(OpcUa_NodeId *start_node, adapter::xml_node_browse_path const &current_prefix);
     void setup_nodes(adapter::xml_node_map_type const &nodes, std::string const &browse_path = "");
     void setup_node(adapter::xml_node_type const &node, UaNode *uaNode);
     void set_variable_from_node(adapter::xml_node_type const &node, UaVariable *variable, adapter::xml_node_fetch_info_type const &fetch_info);
@@ -81,6 +84,7 @@ private:
     std::shared_ptr<adapter::adapter> adapter_;
     std::map<adapter::xml_node_type const *, adapter::xml_node_type const *> mirrored_nodes_;
     std::map<adapter::xml_node_type const *, UaNodeId> nodes_;
+    NodeManagerRoot *root_nm_;
 
 };
 

@@ -70,6 +70,27 @@ struct NodeUserData
 	const adapter::xml_node_type *node;
 };
 
+struct Browse
+{
+	Browse(OpcUa_NodeId *node_id, OpcUa_UInt32 node_class_mask, OpcUa_UInt32 browse_mask);
+	~Browse();
+
+	UaStatus browse(NodeManagerRoot *nm);
+	inline UaReferenceDescriptions &results();
+
+private:
+	ServiceContext service_context_;
+	std::unique_ptr<BrowseContext> browse_context_;
+	std::unique_ptr<OpcUa_ViewDescription> view_description_;
+	std::unique_ptr<OpcUa_NodeId> reference_node_id_;
+	UaReferenceDescriptions reference_descriptions_;
+};
+
+inline UaReferenceDescriptions &Browse::results()
+{
+	return reference_descriptions_;
+}
+
 }
 
 // Namespace for the UA information model http://cs.hs-rm.de/mierswa_thesis/3AchsenEMCNCLaserSchneid/
@@ -86,7 +107,8 @@ NodeManagerDemo::NodeManagerDemo(
                                 //   collisions with a large size.
                                 //   Prefered sizes are 1.009, 10.007, 100.003, 1.000.003, 10.000.019.
 : NodeManagerDemoBase(firesEvents, nHashTableSize),
-  adapter_(adapter)
+  adapter_(adapter),
+  root_nm_(NodeManagerRoot::CreateRootNodeManager())
 {
 }
 
@@ -107,208 +129,195 @@ UaStatus NodeManagerDemo::afterStartUp()
 		return ret;
 	}
 
-	ServiceContext sCtx;
-	NodeManagerRoot* root_nm = NodeManagerRoot::CreateRootNodeManager();
-	OpcUa_NodeId nodeId;
-	nodeId.IdentifierType = OpcUa_IdentifierType_Numeric;
-	nodeId.NamespaceIndex = 0;
-	nodeId.Identifier.Numeric = OpcUaId_RootFolder;
-	OpcUa_NodeId refId;
-	refId.IdentifierType = OpcUa_IdentifierType_Numeric;
-	refId.NamespaceIndex = 0;
-	refId.Identifier.Numeric = OpcUaId_HierarchicalReferences;
-	OpcUa_ViewDescription desc;
-	OpcUa_ViewDescription_Initialize(&desc);
-	OpcUa_UInt32 nodeClassMask = OpcUa_NodeClass_Object | OpcUa_NodeClass_ObjectType | OpcUa_NodeClass_Variable;
-	OpcUa_UInt32 browseMask = OpcUa_BrowseResultMask_TypeDefinition | OpcUa_BrowseResultMask_BrowseName;
-	UaReferenceDescriptions refDesc;
+	OpcUa_NodeId start_node;
+	start_node.IdentifierType = OpcUa_IdentifierType_Numeric;
+	start_node.NamespaceIndex = 0;
+	start_node.Identifier.Numeric = OpcUaId_RootFolder;
 
-	OpcUa_UInt16 cnc_namespace = OpcUaCnc::NodeManagerCNC::getTypeNamespace();
+	adapter::xml_node_browse_path empty_browse_path;
 
-	auto addGMEvent = [this, root_nm, cnc_namespace](OpcUa_UInt16 tdNsIdx, OpcUa_UInt32 tdId, OpcUa_NodeId *addNode) {
-		if (tdNsIdx != cnc_namespace ||
-		    (tdId != OpcUaCncId_CncAxisListType &&
-		     tdId != OpcUaCncId_CncChannelListType &&
-		     tdId != OpcUaCncId_CncSpindleListType)) {
-			return;
-		}
+	check_objects_and_variables(&start_node, empty_browse_path);
 
-		UaNode *foundNode = root_nm->getNode(*addNode);
-
-		if (foundNode == NULL) {
-			throw std::runtime_error("Node not managed by this server.");
-		}
-
-		const UaStatus retAdd = addUaReference(foundNode->nodeId(), OpcUaId_GeneralModelChangeEventType, OpcUaId_GeneratesEvent);
-
-		if (!retAdd.isGood()) {
-			foundNode->releaseReference();
-			throw std::runtime_error("Unable to add GeneralModelChangeEventType reference to some nodes.");
-		}
-
-		foundNode->releaseReference();
-	};
-
-	std::function<void(adapter::xml_node_browse_path const &, OpcUa_NodeId *)> callback2;
-	callback2 = [this, &addGMEvent, &callback2, &sCtx, root_nm, &desc, &refId, nodeClassMask, browseMask](adapter::xml_node_browse_path const &current_path, OpcUa_NodeId *browseNode) {
-		//printf("current prefix %s\n", current_path.str().c_str());
-#if 0
-		UaString nsUri;
-		UaStatus cbRet;
-
-		cbRet = root_nm->getNamespaceUriFromIndex(browseNode->NamespaceIndex, nsUri);
-
-		const std::string nsUriStr = nsUri.toUtf8();
-
-		if (!cbRet.isGood()) {
-			throw std::runtime_error("Unable to find namespace URI.");
-		}
-
-		UaNode *uaNode = root_nm->getNode(*browseNode);
-
-		if (uaNode == NULL) {
-			throw std::runtime_error("Can't fetch node while browsing.");
-		}
-
-		const adapter::xml_node_browse_name new_name = { nsUriStr, uaNode->browseName().toString().toUtf8() };
-		adapter::xml_node_browse_path new_path = current_path;
-		new_path.elements.push_back(new_name);
-
-		uaNode->releaseReference();
-
-		addGMEvent(browseNode->NamespaceIndex, browseNode->Identifier.Numeric, browseNode);
-
-		adapter::xml_node_type *foundNode;
-
-		adapter_->iterate_nodes([this, &foundNode, &current_path](adapter::xml_node_type const &passed_node) {
-			if (passed_node.browse_path == current_path) {
-				printf("found node: %s\n", current_path.str().c_str());
-				return false;
-			}
-	
-			return true;
-		});
-#endif
-
-		BrowseContext bCtx(&desc, browseNode, 0, OpcUa_BrowseDirection_Forward, &refId, OpcUa_True, nodeClassMask, browseMask);
-		UaReferenceDescriptions refDescs;
-		const UaStatus res = root_nm->browse(sCtx, bCtx, refDescs);
-
-		if (!res.isGood()) {
-			return;
-		}
-
-		//if (refDescs.length() > 0) printf("looking at children\n");
-		for (OpcUa_UInt32 i = 0; i < refDescs.length(); i++) {
-			//const OpcUa_UInt16 bNameNs = refDescs[i].BrowseName.NamespaceIndex;
-			//const std::string bNameStr = OpcUa_String_GetRawString(&refDescs[i].BrowseName.Name);
-			const OpcUa_UInt16 tdNs = refDescs[i].TypeDefinition.NodeId.NamespaceIndex;
-			const OpcUa_UInt32 tdId = refDescs[i].TypeDefinition.NodeId.Identifier.Numeric;
-
-			if (tdNs == 0 && tdId == OpcUaId_ServerType) {
-				continue;
-			}
-
-			OpcUa_NodeId *childNode = &refDescs[i].NodeId.NodeId;
-
-			//const std::string nsUri = OpcUa_String_GetRawString(&refDescs[i].NodeId.NamespaceUri);
-			UaStatus nsRet;
-			UaString uaNsUri;
-			nsRet = root_nm->getNamespaceUriFromIndex(refDescs[i].BrowseName.NamespaceIndex, uaNsUri);
-
-			if (!nsRet.isGood()) {
-				throw std::runtime_error("Unable to find namespace URI.");
-			}
-
-			const std::string nsUri = uaNsUri.toUtf8();
-
-			UaNode *uaNode = root_nm->getNode(*childNode);
-
-			if (uaNode == NULL) {
-				throw std::runtime_error("Can't fetch node while browsing.");
-			}
-
-
-
-			const adapter::xml_node_browse_name new_name = { nsUri, uaNode->browseName().toString().toUtf8() };
-			uaNode->releaseReference();
-			if (new_name.name == "ActFeedrate") {
-				printf("Feedrate NS: %s %d\n", new_name.ns.c_str(), childNode->Identifier.Numeric);
-			}
-			adapter::xml_node_browse_path new_path = current_path;
-			new_path.elements.push_back(new_name);
-
-			addGMEvent(childNode->NamespaceIndex, childNode->Identifier.Numeric, childNode);
-
-			adapter_->iterate_nodes([this, childNode, &new_path](adapter::xml_node_type const &passed_node) {
-				//printf("searching: %s %s\n", new_path.str().c_str(), passed_node.browse_path.str().c_str());
-				if (passed_node.browse_path == new_path) {
-					if (nodes_.find(&passed_node) != nodes_.end()) {
-						throw std::runtime_error("Duplicate node.");
-					}
-
-					nodes_[&passed_node] = *childNode;
-					return false;
-				}
-
-				return true;
-			});
-
-
-			//addGMEvent(tdNs, tdId, &refDescs[i].NodeId.NodeId);
-
-			//printf("looking at child\n");
-			callback2(new_path, childNode);
-			//printf("looking at child done\n");
-		}
-		//if (refDescs.length() > 0) printf("looking at children done\n");
-	};
-
-	adapter::xml_node_browse_path current_browse_path;
-	callback2(current_browse_path, &nodeId);
-
-	//Misc::Timer elapsed_timer;
-
-	//elapsed_timer.reset();
-
-	auto callback = [this](adapter::xml_node_type const &node) {
-		UaNodeId uaNodeId;
-
-		try {
-			uaNodeId = nodes_.at(&node);
-		} catch (std::out_of_range const &) {
+	// verify that all nodes specified in XML have been set up
+	auto verify_setup = [this](adapter::xml_node_type const &passed_node) {
+		if (nodes_.find(&passed_node) == nodes_.end()) {
 			char exception_string[1024];
-			snprintf(exception_string, sizeof exception_string, "Node <%s> not present in address space.", node.browse_path.str().c_str());
+			snprintf(exception_string, sizeof exception_string, "Node <%s> not present in address space.", passed_node.browse_path.str().c_str());
 			throw std::runtime_error(exception_string);
 		}
 
-		UaNode *uaNode = NodeManagerRoot::CreateRootNodeManager()->getNode(uaNodeId);
-
-		if (uaNode == NULL) {
-			throw std::runtime_error("Invalid node ID.");
-		}
-
-		try {
-			setup_node(node, uaNode);
-		} catch (std::exception const &) {
-			uaNode->releaseReference();
-			throw;
-		}
-
-		uaNode->releaseReference();
-
 		return true;
 	};
-		
-	adapter_->iterate_nodes(callback);
 
-	//printf("elapsed: %g\n", elapsed_timer.elapsed());
+	adapter_->iterate_nodes(verify_setup);
 
+	// add general model change event to object types
+	std::function<void(OpcUa_NodeId *, adapter::xml_node_browse_path const &)> add_missing;
+
+	add_missing = [this, &add_missing](OpcUa_NodeId *node, adapter::xml_node_browse_path const &current_prefix) {
+		const OpcUa_UInt32 node_class_mask = OpcUa_NodeClass_ObjectType | OpcUa_NodeClass_Object;
+		const OpcUa_UInt32 browse_mask = OpcUa_BrowseResultMask_BrowseName; //OpcUa_BrowseResultMask_TypeDefinition | OpcUa_BrowseResultMask_BrowseName;
+		Browse browse(node, node_class_mask, browse_mask);
+
+		UaStatus result = browse.browse(root_nm_);
+
+		if (!result.isGood()) {
+			return;
+		}
+
+		const OpcUa_UInt16 cnc_namespace = OpcUaCnc::NodeManagerCNC::getTypeNamespace();
+
+		for (OpcUa_UInt32 i = 0; i < browse.results().length(); i++) {
+			OpcUa_ReferenceDescription *current = &browse.results()[i];
+			OpcUa_NodeId *child_node = &current->NodeId.NodeId;
+			const OpcUa_UInt16 definition_ns_idx = current->TypeDefinition.NodeId.NamespaceIndex;
+			const OpcUa_UInt32 definition_id = current->TypeDefinition.NodeId.Identifier.Numeric;
+
+			UaString ua_ns_uri;
+			result = root_nm_->getNamespaceUriFromIndex(current->BrowseName.NamespaceIndex, ua_ns_uri);
+
+			if (!result.isGood()) {
+				throw std::runtime_error("Unable to find namespace URI.");
+			}
+
+			// the variable is reference counted, check exceptions
+			UaNode *ua_child_node = root_nm_->getNode(*child_node);
+
+			if (ua_child_node == NULL) {
+				throw std::runtime_error("Can't fetch node while browsing.");
+			}
+
+			adapter::xml_node_browse_path new_browse_path = current_prefix;
+
+			try {
+				const char *raw_browse_name = OpcUa_String_GetRawString(&(current->BrowseName.Name));
+				const adapter::xml_node_browse_name new_browse_name = { ua_ns_uri.toUtf8(), raw_browse_name };
+				new_browse_path.elements.push_back(new_browse_name);
+
+				const OpcUa_UInt16 ns_idx = current->BrowseName.NamespaceIndex;
+				const OpcUa_UInt32 id = current->NodeId.NodeId.Identifier.Numeric;
+
+				if (ns_idx == cnc_namespace) {
+					switch (id) {
+						case OpcUaCncId_CncAxisListType:
+						case OpcUaCncId_CncChannelListType:
+						case OpcUaCncId_CncSpindleListType:
+							add_general_model_change_event(ua_child_node);
+							break;
+					}
+				}
+			} catch (...) {
+				ua_child_node->releaseReference();
+				throw;
+			}
+
+			add_missing(child_node, new_browse_path);
+		}
+	};
+
+	start_node.Identifier.Numeric = OpcUaId_TypesFolder;
+	add_missing(&start_node, empty_browse_path);
 
 	start();
 
 	// Add custom start up code here
 	return ret;
+}
+
+void NodeManagerDemo::add_general_model_change_event(UaNode *node)
+{
+	const UaStatus result = addUaReference(node->nodeId(), OpcUaId_GeneralModelChangeEventType, OpcUaId_GeneratesEvent);
+
+	if (!result.isGood()) {
+		throw std::runtime_error("Unable to add GeneralModelChangeEventType reference to some nodes.");
+	}
+}
+
+void NodeManagerDemo::check_objects_and_variables(OpcUa_NodeId *start_node, adapter::xml_node_browse_path const &current_prefix)
+{
+	const OpcUa_UInt32 node_class_mask = OpcUa_NodeClass_Object | OpcUa_NodeClass_Variable;
+	const OpcUa_UInt32 browse_mask = OpcUa_BrowseResultMask_TypeDefinition | OpcUa_BrowseResultMask_BrowseName;
+	Browse browse(start_node, node_class_mask, browse_mask);
+
+	UaStatus result = browse.browse(root_nm_);
+
+	if (!result.isGood()) {
+		return;
+	}
+
+	const OpcUa_UInt16 cnc_namespace = OpcUaCnc::NodeManagerCNC::getTypeNamespace();
+
+	for (OpcUa_UInt32 i = 0; i < browse.results().length(); i++) {
+		OpcUa_ReferenceDescription *current = &browse.results()[i];
+		const OpcUa_UInt16 definition_ns_idx = current->TypeDefinition.NodeId.NamespaceIndex;
+		const OpcUa_UInt32 definition_id = current->TypeDefinition.NodeId.Identifier.Numeric;
+
+		// not allowed to browse server
+		if (definition_ns_idx == 0 && definition_id == OpcUaId_ServerType) {
+			continue;
+		}
+
+		OpcUa_NodeId *child_node = &current->NodeId.NodeId;
+
+		//const std::string ns_uri = OpcUa_String_GetRawString(&refDescs[i].NodeId.NamespaceUri);
+		UaString ua_ns_uri;
+		result = root_nm_->getNamespaceUriFromIndex(current->BrowseName.NamespaceIndex, ua_ns_uri);
+
+		if (!result.isGood()) {
+			throw std::runtime_error("Unable to find namespace URI.");
+		}
+
+		adapter::xml_node_browse_path new_browse_path = current_prefix;
+
+		// the variable is reference counted, check exceptions
+		UaNode *ua_child_node = root_nm_->getNode(*child_node);
+
+		if (ua_child_node == NULL) {
+			throw std::runtime_error("Can't fetch node while browsing.");
+		}
+
+		try {
+			const char *raw_browse_name = OpcUa_String_GetRawString(&(current->BrowseName.Name));
+			const adapter::xml_node_browse_name new_browse_name = { ua_ns_uri.toUtf8(), raw_browse_name };
+			new_browse_path.elements.push_back(new_browse_name);
+
+
+			if (definition_ns_idx == cnc_namespace) {
+				switch (definition_id) {
+					case OpcUaCncId_CncAxisListType:
+					case OpcUaCncId_CncChannelListType:
+					case OpcUaCncId_CncSpindleListType:
+						add_general_model_change_event(ua_child_node);
+						break;
+				}
+			}
+
+			adapter_->iterate_nodes([this, ua_child_node, &new_browse_path](adapter::xml_node_type const &passed_node) {
+				if (passed_node.browse_path == new_browse_path) {
+					if (nodes_.find(&passed_node) != nodes_.end()) {
+						throw std::runtime_error("Duplicate node.");
+					}
+
+					nodes_[&passed_node] = *(ua_child_node->nodeId());
+
+					try {
+						setup_node(passed_node, ua_child_node);
+					} catch (std::exception const &) {
+						nodes_.erase(nodes_.find(&passed_node));
+					}
+
+					return false;
+				}
+
+				return true;
+			});
+		} catch (...) {
+			ua_child_node->releaseReference();
+			throw;
+		}
+
+		check_objects_and_variables(child_node, new_browse_path);
+	}
 }
 
 /** Start shut down in derived class before shutting down base class.
@@ -319,17 +328,15 @@ UaStatus NodeManagerDemo::beforeShutDown()
     return ret;
 }
 
-void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaNode)
+void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *ua_node)
 {
-	//UaNode *uaNode = Misc::get_node_from_browse_path(node.browse_path);
-
-	uaNode->setUserData(new NodeUserData(&node));
+	ua_node->setUserData(new NodeUserData(&node));
 
 	if (node.name == "variable") {
-		UaVariable *uaVar;
+		UaVariable *ua_var;
 
 		try {
-			uaVar = dynamic_cast<UaVariable *>(uaNode);
+			ua_var = dynamic_cast<UaVariable *>(ua_node);
 		} catch (std::bad_cast const &) {
 			char exception_string[1024];
 			snprintf(exception_string, sizeof exception_string, "Node <%s> is not a variable in address space.", node.browse_path.str().c_str());
@@ -364,14 +371,14 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 			}
 		}
 
-		if (uaVar->typeDefinitionId() == OpcUaId_DataItemType) {
-			OpcUa::DataItemType *diVar = dynamic_cast<OpcUa::DataItemType *>(uaVar);
+		if (ua_var->typeDefinitionId() == OpcUaId_DataItemType) {
+			OpcUa::DataItemType *di_var = dynamic_cast<OpcUa::DataItemType *>(ua_var);
 			// could set value precision here
-		} else if (uaVar->typeDefinitionId() == OpcUaId_PropertyType) {
-			OpcUa::PropertyType *pVar = dynamic_cast<OpcUa::PropertyType *>(uaVar);
+		} else if (ua_var->typeDefinitionId() == OpcUaId_PropertyType) {
+			OpcUa::PropertyType *p_var = dynamic_cast<OpcUa::PropertyType *>(ua_var);
 			// nothing can be added for property types
-		} else if (uaVar->typeDefinitionId() == OpcUaId_AnalogItemType) {
-			OpcUa::AnalogItemType *aiVar = dynamic_cast<OpcUa::AnalogItemType *>(uaVar);
+		} else if (ua_var->typeDefinitionId() == OpcUaId_AnalogItemType) {
+			OpcUa::AnalogItemType *ai_var = dynamic_cast<OpcUa::AnalogItemType *>(ua_var);
 
 			std::string unit;
 			std::string range_start;
@@ -387,7 +394,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 				throw std::runtime_error(exception_string);
 			}
 
-			aiVar->setEURange(UaRange(std::stod(range_start), std::stod(range_end)));
+			ai_var->setEURange(UaRange(std::stod(range_start), std::stod(range_end)));
 
 			UaEUInformation unit_info;
 
@@ -401,23 +408,23 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 				throw std::runtime_error(exception_string);
 			}
 
-			aiVar->setEngineeringUnits(unit_info);
+			ai_var->setEngineeringUnits(unit_info);
 		} else {
 
-			std::printf("Node <%s> has unknown data type <%s>.", node.browse_path.str().c_str(), uaVar->dataType().toFullString().toUtf8());
+			std::printf("Node <%s> has unknown data type <%s>.", node.browse_path.str().c_str(), ua_var->dataType().toFullString().toUtf8());
 		}
 
 		if (kind == "fix") {
-			const UaNodeId dataType = uaVar->dataType();
+			const UaNodeId data_type = ua_var->dataType();
 			UaVariant variant;
 			bool value_converted = true;
 
-			if (dataType.namespaceIndex() == 0) {
-				if (dataType.identifierNumeric() == OpcUaType_String) {
+			if (data_type.namespaceIndex() == 0) {
+				if (data_type.identifierNumeric() == OpcUaType_String) {
 					variant.setString(value_node->value.c_str());
-				} else if (dataType.identifierNumeric() == OpcUaType_Double) {
+				} else if (data_type.identifierNumeric() == OpcUaType_Double) {
 					variant.setDouble(std::stod(value_node->value));
-				} else if (dataType.identifierNumeric() == OpcUaType_UInt32) {
+				} else if (data_type.identifierNumeric() == OpcUaType_UInt32) {
 					variant.setUInt32(static_cast<std::uint32_t>(std::stoi(value_node->value)));
 				} else {
 					value_converted = false;
@@ -428,7 +435,7 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 
 			if (!value_converted) {
 				char exception_string[1024];
-				snprintf(exception_string, sizeof exception_string, "Node <%s> has unknown conversion for fix value <%s>", node.browse_path.str().c_str(), dataType.toFullString().toUtf8());
+				snprintf(exception_string, sizeof exception_string, "Node <%s> has unknown conversion for fix value <%s>", node.browse_path.str().c_str(), data_type.toFullString().toUtf8());
 				throw std::runtime_error(exception_string);
 			}
 		} else if (kind == "fetcher") {
@@ -443,8 +450,8 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 			}
 
 			if (updated == "interval") {
-				auto callback = [this, uaVar](adapter::xml_node_type const &passed_node, adapter::xml_node_fetch_info_type const &fetch_info) {
-					set_variable_from_node(passed_node, uaVar, fetch_info);
+				auto callback = [this, ua_var](adapter::xml_node_type const &passed_node, adapter::xml_node_fetch_info_type const &fetch_info) {
+					set_variable_from_node(passed_node, ua_var, fetch_info);
 				};
 
 				adapter_->watch_node(node, callback);
@@ -485,9 +492,9 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 			throw std::runtime_error(exception_string);
 		}
 
-		uaVar->setValueHandling(UaVariable_Value_CacheIsSource);
+		ua_var->setValueHandling(UaVariable_Value_CacheIsSource);
 	} else {
-		UaObject *uaObj = dynamic_cast<UaObject *>(uaNode);
+		UaObject *ua_obj = dynamic_cast<UaObject *>(ua_node);
 	}
 
 	std::printf("Node <%s> is set up.\n", node.browse_path.str().c_str());
@@ -496,10 +503,10 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *uaN
 void NodeManagerDemo::set_variable_from_node(adapter::xml_node_type const &node, UaVariable *variable, adapter::xml_node_fetch_info_type const &fetch_info)
 {
 	UaVariant variant;
-	const UaNodeId dataType = variable->dataType();
+	const UaNodeId data_type = variable->dataType();
 	std::vector<std::uint8_t> const &bytes = fetch_info.bytes;
 
-	switch (dataType.identifierNumeric()) {
+	switch (data_type.identifierNumeric()) {
 		case OpcUaType_String: {
 			const std::string string(bytes.begin(), bytes.end());
 			variant.setString(string.c_str());
@@ -526,10 +533,10 @@ void NodeManagerDemo::set_variable_from_node(adapter::xml_node_type const &node,
 		}
 	}
 
-	UaDataValue dv;
-	dv.setValue(variant, OpcUa_True, OpcUa_True);
+	UaDataValue data_value;
+	data_value.setValue(variant, OpcUa_True, OpcUa_True);
 
-	variable->setValue(NULL, dv, OpcUa_False);
+	variable->setValue(NULL, data_value, OpcUa_False);
 
 	printf("setting variable from node: %s\n", node.browse_path.str().c_str());
 	
@@ -548,6 +555,31 @@ namespace
 NodeUserData::NodeUserData(const adapter::xml_node_type *passed_node)
 	: node(passed_node)
 {
+}
+
+Browse::Browse(OpcUa_NodeId *node_id, OpcUa_UInt32 node_class_mask, OpcUa_UInt32 browse_mask)
+	: view_description_(new OpcUa_ViewDescription),
+	  reference_node_id_(new OpcUa_NodeId)
+{
+	OpcUa_ViewDescription_Initialize(view_description_.get());
+
+	reference_node_id_->IdentifierType = OpcUa_IdentifierType_Numeric;
+	reference_node_id_->NamespaceIndex = 0;
+	reference_node_id_->Identifier.Numeric = OpcUaId_HierarchicalReferences;
+
+	browse_context_.reset(new BrowseContext(view_description_.get(), node_id, 0,
+	                                        OpcUa_BrowseDirection_Forward, reference_node_id_.get(),
+                                                OpcUa_True, node_class_mask, browse_mask));
+}
+
+Browse::~Browse()
+{
+	browse_context_.reset();
+}
+
+UaStatus Browse::browse(NodeManagerRoot *nm)
+{
+	return nm->browse(service_context_, *browse_context_, reference_descriptions_);
 }
 
 }
