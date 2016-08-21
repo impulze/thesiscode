@@ -17,31 +17,6 @@
 #include <bitset>
 #include <iostream>
 
-namespace
-{
-
-#ifdef WIN32
-struct my_local_control
-	: wrap::local_control
-{
-	template <class... T>
-	my_local_control(T &&... args);
-
-	void handle_message(wrap::callback_type_type type, void *parameter) override;
-};
-#endif
-
-struct my_remote_control
-	: wrap::remote_control
-{
-	template <class... T>
-	my_remote_control(T &&... args);
-
-	void handle_message(wrap::callback_type_type type, void *parameter) override;
-};
-
-}
-
 namespace wrapper
 {
 
@@ -295,10 +270,14 @@ void wrapper::run()
 
 #ifdef WIN32
 	if (impl_->is_local) {
-		impl_->ctrl.reset(new my_local_control(impl_->cnc_name));
+		std::unique_ptr<wrap::local_control> lctrl(new wrap::local_control());
+		lctrl->open(impl_->cnc_name);
+		impl_->ctrl = std::move(lctrl);
 	} else {
 #endif
-		impl_->ctrl.reset(new my_remote_control(impl_->cnc_name, impl_->host, impl_->port));
+		std::unique_ptr<wrap::remote_control> rctrl(new wrap::remote_control());
+		rctrl->open(impl_->cnc_name, impl_->host, impl_->port);
+		impl_->ctrl = std::move(rctrl);
 #ifdef WIN32
 	}
 #endif
@@ -377,35 +356,8 @@ void wrapper::run()
 	}
 }
 
-}
-
-namespace
+void wrapper::set_error_callback(::adapter::error_callback_type const &callback)
 {
-
-#ifdef WIN32
-template<class... T>
-my_local_control::my_local_control(T &&... args)
-	: wrap::local_control(std::forward<T>(args)...)
-{
-}
-
-void my_local_control::handle_message(wrap::callback_type_type type, void *parameter)
-{
-	const unsigned long parameter_long = *static_cast<unsigned long *>(parameter);
-	std::printf("new message: %d %lu\n", static_cast<int>(type), parameter);
-}
-#endif
-
-template<class... T>
-my_remote_control::my_remote_control(T &&... args)
-	: wrap::remote_control(std::forward<T>(args)...)
-{
-}
-
-void my_remote_control::handle_message(wrap::callback_type_type type, void *parameter)
-{
-	const unsigned long parameter_long = *static_cast<unsigned long *>(parameter);
-	std::printf("new message: %d %lu\n", static_cast<int>(type), parameter);
 }
 
 }

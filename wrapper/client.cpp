@@ -46,20 +46,6 @@ static void sigint_handler(int signal_number)
 
 #endif
 
-namespace
-{
-
-struct my_remote_control
-	: wrap::remote_control
-{
-	template <class... T>
-	my_remote_control(T &&... args);
-
-	void handle_message(wrap::callback_type_type type, void *parameter) override;
-};
-
-}
-
 int client_main(int argc, char **argv)
 {
 #ifdef WIN32
@@ -80,23 +66,30 @@ int client_main(int argc, char **argv)
 #endif
 
 	try {
-		my_remote_control ctrl("CNC1", "10.0.0.138", 44455);
-		printf("init state: %d\n", ctrl.get_init_state());
-		printf("firmware update\n");
-		ctrl.load_firmware_blocked("C:\\Eckelmann\\StdHMI\\log\\download.cfg");
-		printf("send file\n");
+		wrap::remote_control ctrl;
+		ctrl.open("CNC1", "10.0.0.138", 44455);
+		printf("init: %d\n", ctrl.get_init_state());
+		wrap::init_status status = ctrl.load_firmware_blocked("C:\\Eckelmann\\StdHMI\\log\\download.cfg");
+		printf("firmware update: %d\n", status);
 		ctrl.send_file_blocked("C:\\Eckelmann\\StdHMI\\log\\vom_nc.mk", "", wrap::transfer_block_type::MASCHINENKONSTANTEN);
-		printf("done\n");
+		printf("machine constants sent\n");
 
 		wrap::transfer_message msg = wrap::transfer_message();
 
+		// reset
+		msg.controlblock0 = 85;
+		msg.controlblock1 = 170;
+
+#if 0
+		// get progname
 		msg.controlblock0 = 3;
 		msg.controlblock1 = 21;
 		msg.data.resize(4);
-
+		std::uint32_t prognr = 1;
+		std::memcpy(msg.data.data(), &prognr, 4);
 		std::uint32_t prognum = htonl(0);
-
 		std::memcpy(msg.data.data(), &prognum, 4);
+#endif
 
 		ctrl.send_message(msg);
 
@@ -132,21 +125,4 @@ int client_main(int argc, char **argv)
 	WSACleanup();
 #endif
 	return 0;
-}
-
-namespace
-{
-
-template <class... T>
-my_remote_control::my_remote_control(T &&... args)
-	: wrap::remote_control(std::forward<T>(args)...)
-{
-}
-
-void my_remote_control::handle_message(wrap::callback_type_type type, void *parameter)
-{
-	const unsigned long parameter_long = *static_cast<unsigned long *>(parameter);
-	std::printf("new message: %d %lu\n", static_cast<int>(type), parameter_long);
-}
-
 }

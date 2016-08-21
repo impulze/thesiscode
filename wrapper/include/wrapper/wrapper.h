@@ -15,6 +15,7 @@ struct wrapper
 	void watch_node(::adapter::xml_node_type const &node, ::adapter::xml_node_fetch_callback_type const &callback) override;
 	void unwatch_node(::adapter::xml_node_type const &node) override;
 	void run() override;
+	void set_error_callback(::adapter::error_callback_type const &callback) override;
 
 private:
 	struct impl;

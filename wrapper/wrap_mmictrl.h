@@ -48,7 +48,7 @@ enum class callback_type_type
 	 * ncrGetTransferState und ncrGetTransferType können im Callback verwendet werden,
 	 * um Übertragungsstatus abzufragen.
 	 */
-	MMI_TRANSFER_STATE,
+	MMI_TRANSFER_STATE, /* = 4 */
 	MMI_TRANSFER_OK,
 	MMI_TRANSFER_ERROR,
 	MMI_TRANSFER_BREAK,
@@ -64,7 +64,7 @@ enum class callback_type_type
 	 * Empfang einer Nachricht der Steuerung, die nicht von der DLL ausgewertet werden kann.
 	 * ulParam = Pointer auf MSG_TR-Struktur (Speicher nur innerhalb des Callbacks gültig).
 	 */
-	MMI_NCMSG_RECEIVED,
+	MMI_NCMSG_RECEIVED, /* = 10 */
 	/*
 	 * Übergabe von Fehlermeldungen von Steuerung, Gateway oder DLL.
 	 * ulParam = Pointer auf MSG_TR-Struktur (Speicher nur innerhalb des Callbacks gültig).
@@ -85,8 +85,12 @@ enum class callback_type_type
 	 * Meldet den Status in ulParam (Pointer auf CAN_TRANSFER_STATE_TR) der laufenden
 	 * CANopen SDO-Übertragung.
 	 */
-	MMI_CAN_TRANSFER_STATE,
+	MMI_CAN_TRANSFER_STATE, /* 14 */
 	MMI_CAN_TRANSFER_COMPLETE,
+	/*
+	 * Nachricht konnte nicht von dieser Implementierung verarbeitet werden
+	 */
+	MMI_UNIMPLEMENTED,
 };
 
 enum class transfer_status_type
@@ -151,10 +155,6 @@ struct transfer_message
 
 struct control
 {
-	// Öffnen der Standard-Steuerung
-	// Parameter: Callback-Funktion
-	//virtual open() = 0;
-
 	// Schließen und Beenden der Steuerung
 	virtual ~control();
 
@@ -224,7 +224,7 @@ struct control
 
 	// Callback für Steuerungs-Nachrichten
 	// Parameter: Aufruf-Typ, Zusatzparameter je nach Wert des Aufruf-Typs
-	virtual void handle_message(callback_type_type type, void *parameter) = 0;
+	virtual void on_message(callback_type_type type, void *parameter) = 0;
 };
 
 struct gateway
@@ -242,19 +242,20 @@ struct gateway
 struct local_control
 	: control
 {
-	// Öffnen der Steuerung mit einem Namen
-	// Parameter: Name der Steuerung, Callback-Funktion
-	local_control(std::string const &name);
-
+	local_control();
 	virtual ~local_control();
 
-	virtual bool get_init_state() override;
-	virtual init_status load_firmware_blocked(std::string const &config_name) override;
-	virtual void send_file_blocked(std::string const &name, std::string const &header,
-	                               transfer_block_type type) override;
-	virtual void send_message(transfer_message const &message) override;
-	virtual void read_param_array(std::map<std::uint16_t, double> &parameters) override;
+	void open(std::string const &name);
+
+	bool get_init_state() override;
+	init_status load_firmware_blocked(std::string const &config_name) override;
+	void send_file_blocked(std::string const &name, std::string const &header,
+	                       transfer_block_type type) override;
+	void send_message(transfer_message const &message) override;
+	void read_param_array(std::map<std::uint16_t, double> &parameters) override;
 	//virtual bool write_param_array(std::map<std::uint16_t, double> &parameters) override;
+
+	void on_message(callback_type_type type, void *parameter) override;
 
 private:
 	struct local_impl;
@@ -266,19 +267,19 @@ private:
 struct remote_control
 	: control
 {
-	// Öffnen der Steuerung mit einem Namen
-	// Parameter: Name der Steuerung, Callback-Funktion
-	remote_control(std::string const &name, std::string const &address, std::uint16_t port);
-
+	remote_control();
 	virtual ~remote_control();
 
-	virtual bool get_init_state() override;
-	virtual init_status load_firmware_blocked(std::string const &config_name) override;
-	virtual void send_file_blocked(std::string const &name, std::string const &header,
-	                               transfer_block_type type) override;
-	virtual void send_message(transfer_message const &message) override;
-	virtual void read_param_array(std::map<std::uint16_t, double> &parameters) override;
+	void open(std::string const &name, std::string const &address, std::uint16_t port);
+	bool get_init_state() override;
+	init_status load_firmware_blocked(std::string const &config_name) override;
+	void send_file_blocked(std::string const &name, std::string const &header,
+	                       transfer_block_type type) override;
+	void send_message(transfer_message const &message) override;
+	void read_param_array(std::map<std::uint16_t, double> &parameters) override;
 	//virtual bool write_param_array(std::map<std::uint16_t, double> &parameters) override;
+
+	void on_message(callback_type_type type, void *parameter) override;
 
 private:
 	struct remote_impl;

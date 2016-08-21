@@ -5,6 +5,7 @@
 #include <cassert>
 #include <codecvt>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <locale>
 #include <map>
@@ -64,7 +65,7 @@ namespace
 {
 
 bool g_dll_loaded;
-std::map<LPVOID, wrap::control *> g_control_mapping;
+std::vector<wrap::control *> g_controls;
 
 void WINAPI callback(ULONG type, ULONG param, LPVOID context);
 void load_cnc_dlls();
@@ -173,27 +174,14 @@ control::~control()
 }
 
 #ifdef WIN32
-local_control::local_control(std::string const &name)
+local_control::local_control()
 {
-	if (!g_dll_loaded) {
-		load_cnc_dlls();
-		g_dll_loaded = true;
-	}
-	printf("test\n");
-	HANDLE handle = ncrOpenControl_p(name.c_str(), ::callback, this);
-	printf("molk\n");
-
-	if (handle == INVALID_HANDLE_VALUE) {
-		throw error::create_error();
-	}
-
 	impl_ = new local_impl();
-	impl_->handle = handle;
+	impl_->handle = NULL;
 
 	try {
-		g_control_mapping[this] = this;
+		g_controls.push_back(this);
 	} catch (...) {
-		ncrCloseControl_p(impl_->handle);
 		delete impl_;
 		throw;
 	}
@@ -201,13 +189,15 @@ local_control::local_control(std::string const &name)
 
 local_control::~local_control()
 {
-	ncrCloseControl_p(impl_->handle);
+	if (impl_->handle != NULL) {
+		ncrCloseControl_p(impl_->handle);
+	}
 
 	delete impl_;
 
-	for (std::map<LPVOID, control *>::iterator it = g_control_mapping.begin(); it != g_control_mapping.end();) {
-		if (it->first == this) {
-			g_control_mapping.erase(it);
+	for (auto it = g_controls.begin(); it != g_controls.end();) {
+		if (*it == this) {
+			g_controls.erase(it);
 			return;
 		} else {
 			++it;
@@ -215,8 +205,27 @@ local_control::~local_control()
 	}
 }
 
+void local_control::open(std::string const &name)
+{
+	if (!g_dll_loaded) {
+		load_cnc_dlls();
+		g_dll_loaded = true;
+	}
+
+	impl_->handle = ncrOpenControl_p(name.c_str(), ::callback, this);
+
+	if (impl_->handle == INVALID_HANDLE_VALUE) {
+		impl_->handle = NULL;
+		throw error::create_error();
+	}
+}
+
 bool local_control::get_init_state()
 {
+	if (impl_->handle == NULL) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	const LONG result = ncrGetInitState_p(impl_->handle);
 
 	if (result == -1) {
@@ -228,6 +237,10 @@ bool local_control::get_init_state()
 
 init_status local_control::load_firmware_blocked(std::string const &config_name)
 {
+	if (impl_->handle == NULL) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	const LONG result = ncrLoadFirmwareBlocked_p(impl_->handle, config_name.c_str());
 
 	if (result == 0) {
@@ -242,6 +255,10 @@ init_status local_control::load_firmware_blocked(std::string const &config_name)
 void local_control::send_file_blocked(std::string const &name, std::string const &header,
                                 transfer_block_type type)
 {
+	if (impl_->handle == NULL) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	const LONG cnv_type = block_type_conversion(type);
 	const LONG result = ncrSendFileBlocked_p(impl_->handle, name.c_str(), header.c_str(), cnv_type);
 
@@ -250,6 +267,10 @@ void local_control::send_file_blocked(std::string const &name, std::string const
 
 void local_control::send_message(transfer_message const &message)
 {
+	if (impl_->handle == NULL) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	MSG_TR em_message;
 
 	em_message.sb0_uc = message.controlblock0;
@@ -260,48 +281,13 @@ void local_control::send_message(transfer_message const &message)
 	em_message.len_us = message.data.size();
 	em_message.modul_uc = message.sender;
 
-	printf("msg size: %d\n", message.data.size());
-	switch (message.controlblock0) {
-		case SB0_AUFTRAG_KUC: {
-				if (message.controlblock1 == SB1_GET_PROGNAME_KUC) {
-					if (message.data.size() != 4) {
-						throw std::runtime_error("Invalid length for SB1_GET_PROGNAME_KUC.");
-					}
-
-					std::uint32_t num;
-
-					std::memcpy(&num, message.data.data(), 4);
-
-					num = ntohl(num);
-
-					em_message.n.val_aul[0] = num;
-				} else {
-					throw std::runtime_error("Only some messages supported.");
-				}
-
-				break;
-		}
-
-		case SB0_RESET_KUC: {
-			if (message.controlblock1 == SB1_RESET_KUC) {
-				if (message.data.size() != 0) {
-					throw std::runtime_error("Invalid length for SB1_RESET_KUC.");
-				}
-
-				break;
-			} else {
-				throw std::runtime_error("Only some messages supported.");
-			}
-
-			break;
-		}
-
-		default:
-			throw std::runtime_error("Only some messages supported.");
+	for (decltype(message.data.size()) i = 0; i < message.data.size(); i++) {
+		em_message.n.val_auc[i] = message.data[i];
 	}
 
 	const BOOL result = ncrSendMessage_p(impl_->handle, &em_message);
 
+	printf("checking result\n");
 	if (result == TRUE) {
 		return;
 	}
@@ -311,6 +297,10 @@ void local_control::send_message(transfer_message const &message)
 
 void local_control::read_param_array(std::map<std::uint16_t, double> &parameters)
 {
+	if (impl_->handle == NULL) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	if (parameters.size() > 0xFFFF) {
 		throw std::runtime_error("Only 16-bit size allowed for read_param_array.");
 	}
@@ -333,52 +323,77 @@ void local_control::read_param_array(std::map<std::uint16_t, double> &parameters
 	}
 
 	std::vector<double>::const_iterator value_it = values.begin();
-	std::map<std::uint16_t, double>::iterator parameters_it = parameters.begin();
+	std::vector<std::uint16_t>::const_iterator index_it = indices.begin();
+
+	//std::map<std::uint16_t, double>::iterator parameters_it = parameters.begin();
 
 	while (value_it != values.end()) {
-		parameters_it->second = *value_it;
-		++parameters_it;
+		printf("value: %d\n", *value_it);
+		parameters[*index_it] = *value_it;
+		++index_it;
 		++value_it;
+	}
+}
+
+void local_control::on_message(callback_type_type type, void *parameter)
+{
+	assert(impl_->handle);
+
+	switch (type) {
+		case wrap::callback_type_type::MMI_ERROR_MSG: {
+			transfer_message *msg = static_cast<transfer_message *>(parameter);
+			const std::uint8_t task = msg->data[0];
+			const std::uint8_t cls = msg->data[1];
+			std::int16_t num;
+			std::memcpy(&num, msg->data.data() + 2, 2);
+			const char *format = reinterpret_cast<char *>(msg->data.data() + 4);
+			const char *data = reinterpret_cast<char *>(msg->data.data() + 84);
+			char error_msg[1024];
+			snprintf(error_msg, sizeof error_msg, format, data);
+			std::printf("Received local NC ERROR: [task: %d, class: %d, num: %hd] [%s]\n", task, cls, num, error_msg);
+			break;
+		}
+
+		case wrap::callback_type_type::MMI_NCMSG_RECEIVED: {
+			transfer_message *msg = static_cast<transfer_message *>(parameter);
+			if (msg->controlblock0 == 3 && msg->controlblock1 == 22) { // progname
+				std::uint32_t prognr;
+				std::memcpy(&prognr, msg->data.data(), 4);
+				const std::string name(msg->data.begin() + 4, msg->data.end());
+				std::printf("Received local NCMSG: Program name for [num: %d]=[string: %s]\n", prognr, name.c_str());
+			} else {
+				std::printf("Received local NCMSG: %d %lu\n", msg->controlblock0, msg->controlblock1);
+			}
+			break;
+		}
+
+		case wrap::callback_type_type::MMI_UNIMPLEMENTED: {
+			const char *msg = static_cast<const char *>(parameter);
+			std::fprintf(stderr, "NCR message handling not implemented: %s\n", msg);
+			break;
+		}
+
+		default: {
+			const unsigned long parameter_long = *static_cast<unsigned long *>(parameter);
+			std::printf("Received local DLL message: %d %lu\n", type, parameter_long);
+			break;
+		}
 	}
 }
 #endif
 
-remote_control::remote_control(std::string const &name, std::string const &address, std::uint16_t port)
+remote_control::remote_control()
 {
 	impl_ = new remote_impl;
-	impl_->name = name;
-
-	try {
-		impl_->client.reset(new wrap::client(address, port));
-	} catch (...) {
-		delete impl_;
-		throw;
-	}
-
-	try {
-		wrap::message message(wrap::message_type::CTRL_OPEN);
-		message.append(name);
-		wrap::message response = impl_->client->send_message(message, 2000);
-
-		check_server_error(*(impl_->client), response);
-		check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_OPEN_RESPONSE);
-
-		if (response.contents[0] == 0) {
-			std::printf("[STATUS] CNC Connection to <%s> successful.\n", name.c_str());
-		} else {
-			const std::string error_string = response.extract_string(1);
-			char exception_string[1024];
-			snprintf(exception_string, sizeof exception_string, "CNC Connection to <%s> failed.\n%s\n", name.c_str(), error_string.c_str());
-			throw std::runtime_error(exception_string);
-		}
-	} catch (...) {
-		delete impl_;
-		throw;
-	}
 }
 
 remote_control::~remote_control()
 {
+	if (!impl_->client) {
+		delete impl_;
+		return;
+	}
+
 	try {
 		wrap::message message(wrap::message_type::CTRL_CLOSE);
 		wrap::message response = impl_->client->send_message(message, 2000);
@@ -399,8 +414,39 @@ remote_control::~remote_control()
 	}
 }
 
+void remote_control::open(std::string const &name, std::string const &address, std::uint16_t port)
+{
+	impl_->name = name;
+	impl_->client.reset(new wrap::client(address, port));
+
+	try {
+		wrap::message message(wrap::message_type::CTRL_OPEN);
+		message.append(name);
+		wrap::message response = impl_->client->send_message(message, 2000);
+
+		check_server_error(*(impl_->client), response);
+		check_correct_response_type(*(impl_->client), response, wrap::message_type::CTRL_OPEN_RESPONSE);
+
+		if (response.contents[0] == 0) {
+			std::printf("[STATUS] CNC Connection to <%s> successful.\n", name.c_str());
+		} else {
+			const std::string error_string = response.extract_string(1);
+			char exception_string[1024];
+			snprintf(exception_string, sizeof exception_string, "CNC Connection to <%s> failed.\n%s\n", name.c_str(), error_string.c_str());
+			throw std::runtime_error(exception_string);
+		}
+	} catch (...) {
+		impl_->client.reset();
+		throw;
+	}
+}
+
 bool remote_control::get_init_state()
 {
+	if (!impl_->client) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	wrap::message message(wrap::message_type::CTRL_GET_INIT);
 	wrap::message response = impl_->client->send_message(message, 1000);
 
@@ -420,6 +466,10 @@ bool remote_control::get_init_state()
 
 init_status remote_control::load_firmware_blocked(std::string const &config_name)
 {
+	if (!impl_->client) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	wrap::message message(wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED);
 	message.append(config_name);
 	wrap::message response = impl_->client->send_message(message, 20000);
@@ -440,6 +490,10 @@ init_status remote_control::load_firmware_blocked(std::string const &config_name
 void remote_control::send_file_blocked(std::string const &name, std::string const &header,
                                        transfer_block_type type)
 {
+	if (!impl_->client) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	wrap::message message(wrap::message_type::CTRL_SEND_FILE_BLOCKED);
 	message.append(name);
 	message.append(header);
@@ -466,6 +520,10 @@ void remote_control::send_file_blocked(std::string const &name, std::string cons
 
 void remote_control::send_message(transfer_message const &message)
 {
+	if (!impl_->client) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	wrap::message com_message(wrap::message_type::CTRL_SEND_MESSAGE);
 
 	// HACK: internal message handling here
@@ -499,6 +557,10 @@ void remote_control::send_message(transfer_message const &message)
 
 void remote_control::read_param_array(std::map<std::uint16_t, double> &parameters)
 {
+	if (!impl_->client) {
+		throw std::runtime_error("Control not opened.");
+	}
+
 	wrap::message message(wrap::message_type::CTRL_READ_PARAM_ARRAY);
 
 	message.append(static_cast<std::uint16_t>(parameters.size()));
@@ -527,41 +589,110 @@ void remote_control::read_param_array(std::map<std::uint16_t, double> &parameter
 	}
 }
 
+void remote_control::on_message(callback_type_type type, void *parameter)
+{
+	assert(impl_->client);
+}
+
 }
 
 #ifdef WIN32
 namespace
 {
 
-void WINAPI callback(ULONG type, ULONG parameter, LPVOID context)
+wrap::transfer_message eckelmann_to_cpp_message(ULONG parameter)
 {
-	for (auto &entry: g_control_mapping) {
-		if (entry.first == context) {
-			if (type == VK_MMI_NCMSG_RECEIVED) {
-				MSG_TR *em_message = reinterpret_cast<MSG_TR *>(parameter);
+	MSG_TR *em_message = reinterpret_cast<MSG_TR *>(parameter);
+	wrap::transfer_message msg = wrap::transfer_message();
 
-				wrap::transfer_message msg = wrap::transfer_message();
-				msg.controlblock0 = em_message->sb0_uc;
-				msg.controlblock1 = em_message->sb1_uc;
-				msg.controlblock2 = em_message->sb2_uc;
-				msg.current_block_number = em_message->index_uc;
-				msg.handle = em_message->handle_uc;
-				msg.sender = em_message->modul_uc;
+	msg.controlblock0 = em_message->sb0_uc;
+	msg.controlblock1 = em_message->sb1_uc;
+	msg.controlblock2 = em_message->sb2_uc;
+	msg.current_block_number = em_message->index_uc;
+	msg.handle = em_message->handle_uc;
+	msg.sender = em_message->modul_uc;
 
-				for (std::uint16_t i = 0; i < em_message->len_us; i++) {
-					msg.data.push_back(em_message->n.val_auc[i]);
-				}
+#define CB(x, y) ((static_cast<std::uint16_t>(x) << 8) | y)
 
-				entry.second->handle_message(conversion_callback_type_type(type), &msg);
-			} else {
-				entry.second->handle_message(conversion_callback_type_type(type), &parameter);
-			}
+	switch (CB(msg.controlblock0, msg.controlblock1)) {
+		case CB(SB0_POLL_KUC, SB1_POLL_KUC): {
+			return msg;
+		}
 
-			return;
+		case CB(SB0_AUFTRAG_KUC, SB1_PROGRAMM_ENDE_KUC): {
+			msg.data.resize(2);
+			std::memcpy(msg.data.data(), &em_message->n.progende_r.quittung_s, 2);
+			return msg;
+		}
+
+		case CB(SB0_EXCEPTION_KUC, SB1_FEHLERNUMMER_KUC): {
+			msg.data.resize(164);
+
+			msg.data[0] = em_message->n.err_meld_r.task_uc;
+			msg.data[1] = em_message->n.err_meld_r.klasse_uc;
+			std::memcpy(msg.data.data() + 2, &em_message->n.err_meld_r.nummer_s, 2);
+			std::memcpy(msg.data.data() + 4, &em_message->n.err_meld_r.info_format_ac[0], 80);
+			std::memcpy(msg.data.data() + 84, &em_message->n.err_meld_r.info_data_ac[0], 80);
+
+			return msg;
+		}
+
+		case CB(SB0_AUFTRAG_KUC, SB1_PROGNAME_KUC): {
+			char string_size = em_message->len_us - 4;
+			msg.data.resize(4 + string_size);
+
+			std::uint32_t num;
+			std::memcpy(msg.data.data(), &em_message->n.val_auc[0], 4);
+			std::memcpy(msg.data.data() + 4, &em_message->n.val_ac[4], string_size);
+
+			return msg;
 		}
 	}
 
-	assert(false);
+#undef CB
+
+	char exception_string[1024];
+	snprintf(exception_string, sizeof exception_string, "Unable to handle message [cb0: %d, cb1: %d].", msg.controlblock0, msg.controlblock1);
+	throw std::runtime_error(exception_string);
+}
+
+void do_callback(ULONG type, ULONG parameter, wrap::control *ctrl)
+{
+	const wrap::callback_type_type cpp_type = conversion_callback_type_type(type);
+
+	switch (type) {
+		case VK_MMI_NCMSG_RECEIVED:
+		case VK_MMI_ERROR_MSG: {
+			wrap::transfer_message msg = eckelmann_to_cpp_message(parameter);
+			ctrl->on_message(cpp_type, &msg);
+			break;
+		}
+
+		default:
+			ctrl->on_message(cpp_type, &parameter);
+	}
+}
+
+void WINAPI callback(ULONG type, ULONG parameter, LPVOID context)
+{
+	wrap::control *ctrl = NULL;
+
+	for (auto it = g_controls.begin(); it != g_controls.end(); ++it) {
+		if (*it == context) {
+			ctrl = *it;
+			break;
+		}
+	}
+
+	if (ctrl == NULL) {
+		assert(false);
+	}
+
+	try {
+		do_callback(type, parameter, ctrl);
+	} catch (std::exception const &error) {
+		ctrl->on_message(wrap::callback_type_type::MMI_UNIMPLEMENTED, const_cast<char *>(error.what()));
+	}
 }
 
 void load_cnc_dlls()

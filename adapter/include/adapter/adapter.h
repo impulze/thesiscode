@@ -59,6 +59,7 @@ struct xml_node_fetch_info_type
 };
 
 typedef std::function<void(xml_node_type const &node, xml_node_fetch_info_type const &fetch_info)> xml_node_fetch_callback_type;
+typedef std::function<void(void *error_info)> error_callback_type;
 
 struct adapter
 {
@@ -69,6 +70,7 @@ struct adapter
 	virtual void watch_node(xml_node_type const &node, xml_node_fetch_callback_type const &callback) = 0;
 	virtual void unwatch_node(xml_node_type const &node) = 0;
 	virtual void run() = 0;
+	virtual void set_error_callback(error_callback_type const &callback) = 0;
 
 protected:
 	xml_node_map_type const nodes_;

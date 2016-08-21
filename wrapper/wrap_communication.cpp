@@ -41,6 +41,21 @@ typedef SOCKET socket_type;
 // maximum buffer size at which point the client will be disconnected
 #define READ_BUFFER_MAX 5000
 
+namespace
+{
+
+struct client_data;
+
+struct client_local_control
+	: ::wrap::local_control
+{
+	client_local_control(client_data *client_data);
+
+	void handle_message(::wrap::callback_type_type type, void *parameter);
+
+	client_data *client_data;
+};
+
 struct getaddrinfo_error
 	: std::runtime_error
 {
@@ -72,16 +87,16 @@ struct lookup_entry
 	socklen_t address_length;
 };
 
-static std::vector<lookup_entry> lookup(std::string const &address, std::uint16_t port);
-static std::string error_string_from_getaddrinfo_error(int error);
-static std::string error_string_from_function_call(std::string const &function, bool socket_related);
-static std::string address_to_string(const sockaddr_storage *address, int family);
+std::vector<lookup_entry> lookup(std::string const &address, std::uint16_t port);
+std::string error_string_from_getaddrinfo_error(int error);
+std::string error_string_from_function_call(std::string const &function, bool socket_related);
+std::string address_to_string(const sockaddr_storage *address, int family);
 
 struct client_data
 {
 	bool recv_bytes();
-	void send_message(wrap::message const &message);
-	void send_response(wrap::message const &message);
+	void send_message(::wrap::message const &message);
+	void send_response(::wrap::message const &message);
 
 	socket_type socket;
 	std::string address_string;
@@ -96,19 +111,10 @@ struct client_data
 };
 
 #ifdef WIN32
-struct client_local_control
-	: wrap::local_control
-{
-	template <class... T>
-	client_local_control(T &&... args);
-
-	void handle_message(wrap::callback_type_type type, void *parameter) override;
-
-	std::string get_name() const;
-};
-
-static std::map<client_data *, std::unique_ptr<client_local_control>> g_controls;
+std::map<client_data *, std::unique_ptr<::wrap::local_control>> g_controls;
 #endif
+
+}
 
 namespace wrap
 {
@@ -143,6 +149,9 @@ struct client_impl
 };
 
 }
+
+namespace
+{
 
 getaddrinfo_error::getaddrinfo_error(int error)
 	: std::runtime_error(error_string_from_getaddrinfo_error(error))
@@ -366,7 +375,7 @@ bool client_data::recv_bytes()
 	return true;
 }
 
-void client_data::send_message(wrap::message const &message)
+void client_data::send_message(::wrap::message const &message)
 {
 	std::vector<std::uint8_t> bytes;
 
@@ -387,10 +396,9 @@ void client_data::send_message(wrap::message const &message)
 	}
 }
 
-void client_data::send_response(wrap::message const &message)
+void client_data::send_response(::wrap::message const &message)
 {
-	printf("sending response\n");
-	std::unique_ptr<wrap::message> response;
+	std::unique_ptr<::wrap::message> response;
 
 #ifdef WIN32
 	auto control_iterator = g_controls.find(this);
@@ -398,7 +406,7 @@ void client_data::send_response(wrap::message const &message)
 
 	switch (message.type) {
 #ifdef WIN32
-		case wrap::message_type::CTRL_OPEN: {
+	case ::wrap::message_type::CTRL_OPEN: {
 			const std::string name = message.extract_string(0);
 
 			if (control_iterator != g_controls.end()) {
@@ -409,10 +417,11 @@ void client_data::send_response(wrap::message const &message)
 
 			std::unique_ptr<client_local_control> new_control;
 
-			response.reset(new wrap::message(wrap::message_type::CTRL_OPEN_RESPONSE));
+			response.reset(new ::wrap::message(::wrap::message_type::CTRL_OPEN_RESPONSE));
 
 			try {
-				new_control.reset(new client_local_control(name));
+				new_control.reset(new client_local_control(this));
+				new_control->open(name);
 			} catch (std::exception const &exception) {
 				std::fprintf(stderr, "Unable to open CNC connection to <%s>: %s", name.c_str(), exception.what());
 				response->append(static_cast<std::uint8_t>(1));
@@ -427,14 +436,14 @@ void client_data::send_response(wrap::message const &message)
 			break;
 		}
 
-		case wrap::message_type::CTRL_CLOSE: {
+		case ::wrap::message_type::CTRL_CLOSE: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
 				snprintf(exception_string, sizeof exception_string, "Unable to close non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
-			response.reset(new wrap::message(wrap::message_type::CTRL_CLOSE_RESPONSE));
+			response.reset(new ::wrap::message(::wrap::message_type::CTRL_CLOSE_RESPONSE));
 
 			try {
 				g_controls.erase(control_iterator);
@@ -450,7 +459,7 @@ void client_data::send_response(wrap::message const &message)
 			break;
 		}
 
-		case wrap::message_type::CTRL_GET_INIT: {
+		case ::wrap::message_type::CTRL_GET_INIT: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
 				snprintf(exception_string, sizeof exception_string, "Unable to get state for non-existing CNC connection for client <%s>.", address_string.c_str());
@@ -458,7 +467,7 @@ void client_data::send_response(wrap::message const &message)
 			}
 
 			bool state;
-			response.reset(new wrap::message(wrap::message_type::CTRL_GET_INIT_RESPONSE));
+			response.reset(new ::wrap::message(::wrap::message_type::CTRL_GET_INIT_RESPONSE));
 
 			try {
 				state = control_iterator->second->get_init_state();
@@ -473,21 +482,21 @@ void client_data::send_response(wrap::message const &message)
 			break;
 		}
 
-		case wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED: {
+		case ::wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
 				snprintf(exception_string, sizeof exception_string, "Unable to load firmware for non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
-			response.reset(new wrap::message(wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED_RESPONSE));
+			response.reset(new ::wrap::message(::wrap::message_type::CTRL_LOAD_FIRMWARE_BLOCKED_RESPONSE));
 
 			const std::string config_name = message.extract_string(0);
-			wrap::init_status status;
+			::wrap::init_status status;
 
 			try {
 				status = control_iterator->second->load_firmware_blocked(config_name);
-			} catch (wrap::error const &error) {
+			} catch (::wrap::error const &error) {
 				response->append(static_cast<std::uint8_t>(1));
 				response->append(error.what());
 				response->append(error.win32_error);
@@ -499,28 +508,28 @@ void client_data::send_response(wrap::message const &message)
 			break;
 		}
 
-		case wrap::message_type::CTRL_SEND_FILE_BLOCKED: {
+		case ::wrap::message_type::CTRL_SEND_FILE_BLOCKED: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
 				snprintf(exception_string, sizeof exception_string, "Unable to send file to non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
-			response.reset(new wrap::message(wrap::message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE));
+			response.reset(new ::wrap::message(::wrap::message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE));
 
 			const std::string name = message.extract_string(0);
 			const std::string header = message.extract_string(static_cast<std::uint16_t>(2 + name.size()));
-			const wrap::transfer_block_type type = static_cast<wrap::transfer_block_type>(message.extract_bit8(static_cast<std::uint16_t>(2 + name.size() + 2 + header.size())));
+			const ::wrap::transfer_block_type type = static_cast<::wrap::transfer_block_type>(message.extract_bit8(static_cast<std::uint16_t>(2 + name.size() + 2 + header.size())));
 
 			try {
 				control_iterator->second->send_file_blocked(name, header, type);
-			} catch (wrap::transfer_exception_error const &error) {
+			} catch (::wrap::transfer_exception_error const &error) {
 				response->append(static_cast<std::uint8_t>(1));
 				response->append(static_cast<std::uint8_t>(type));
 				response->append(error.what());
 				response->append(error.win32_error);
 				break;
-			} catch (wrap::transfer_exception const &exception) {
+			} catch (::wrap::transfer_exception const &exception) {
 				response->append(static_cast<std::uint8_t>(1));
 				response->append(static_cast<std::uint8_t>(type));
 				response->append(exception.what());
@@ -531,7 +540,7 @@ void client_data::send_response(wrap::message const &message)
 			break;
 		}
 
-		case wrap::message_type::CTRL_READ_PARAM_ARRAY: {
+		case ::wrap::message_type::CTRL_READ_PARAM_ARRAY: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
 				snprintf(exception_string, sizeof exception_string, "Unable to read param array for non-existing CNC connection for client <%s>.", address_string.c_str());
@@ -548,11 +557,11 @@ void client_data::send_response(wrap::message const &message)
 				position += 2;
 			}
 
-			response.reset(new wrap::message(wrap::message_type::CTRL_READ_PARAM_ARRAY_RESPONSE));
+			response.reset(new ::wrap::message(::wrap::message_type::CTRL_READ_PARAM_ARRAY_RESPONSE));
 
 			try {
 				control_iterator->second->read_param_array(parameters);
-			} catch (wrap::error const &error) {
+			} catch (::wrap::error const &error) {
 				response->append(static_cast<std::uint8_t>(1));
 				response->append(error.what());
 				response->append(error.win32_error);
@@ -569,14 +578,14 @@ void client_data::send_response(wrap::message const &message)
 			break;
 		}
 
-		case wrap::message_type::CTRL_SEND_MESSAGE: {
+		case ::wrap::message_type::CTRL_SEND_MESSAGE: {
 			if (control_iterator == g_controls.end()) {
 				char exception_string[1024];
 				snprintf(exception_string, sizeof exception_string, "Unable to send message to non-existing CNC connection for client <%s>.", address_string.c_str());
 				throw std::runtime_error(exception_string);
 			}
 
-			wrap::transfer_message msg;
+			::wrap::transfer_message msg;
 
 			const std::uint16_t size = message.extract_bit16(0);
 
@@ -593,11 +602,11 @@ void client_data::send_response(wrap::message const &message)
 				msg.data.push_back(message.extract_bit8(position++));
 			}
 
-			response.reset(new wrap::message(wrap::message_type::CTRL_SEND_MESSAGE_RESPONSE));
+			response.reset(new ::wrap::message(::wrap::message_type::CTRL_SEND_MESSAGE_RESPONSE));
 
 			try {
 				control_iterator->second->send_message(msg);
-			} catch (wrap::error const &error) {
+			} catch (::wrap::error const &error) {
 				response->append(static_cast<std::uint8_t>(1));
 				response->append(error.what());
 				response->append(error.win32_error);
@@ -611,38 +620,14 @@ void client_data::send_response(wrap::message const &message)
 
 #endif
 		default:
-			response.reset(new wrap::message(wrap::message_type::OK));
+			response.reset(new ::wrap::message(::wrap::message_type::OK));
 			break;
 	}
 
 	send_message(*response);
 }
 
-#ifdef WIN32
-template <class... T>
-client_local_control::client_local_control(T &&... args)
-	: local_control(std::forward<T>(args)...)
-{
 }
-
-void client_local_control::handle_message(wrap::callback_type_type type, void *parameter)
-{
-	const unsigned long parameter_long = *static_cast<unsigned long *>(parameter);
-	switch (type) {
-		case wrap::callback_type_type::MMI_NCMSG_RECEIVED: {
-			wrap::transfer_message *msg = static_cast<wrap::transfer_message *>(parameter);
-
-			std::printf("CNC MESSAGE: %d %lu\n", msg->controlblock0, msg->controlblock1);
-
-			break;
-		}
-
-		default:
-			std::printf("DLL MESSAGE: %d %lu\n", type, parameter_long);
-			break;
-	}
-}
-#endif
 
 namespace wrap
 {
@@ -1057,5 +1042,21 @@ timeout_exception::timeout_exception(std::string const &error_msg)
 	: std::runtime_error(error_msg)
 {
 }
+
+}
+
+namespace
+{
+
+#ifdef WIN32
+client_local_control::client_local_control(struct client_data *client_data)
+	: client_data(client_data)
+{
+}
+
+void client_local_control::handle_message(::wrap::callback_type_type type, void *parameter)
+{
+}
+#endif
 
 }
