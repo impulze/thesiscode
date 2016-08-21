@@ -287,7 +287,6 @@ void local_control::send_message(transfer_message const &message)
 
 	const BOOL result = ncrSendMessage_p(impl_->handle, &em_message);
 
-	printf("checking result\n");
 	if (result == TRUE) {
 		return;
 	}
@@ -325,10 +324,7 @@ void local_control::read_param_array(std::map<std::uint16_t, double> &parameters
 	std::vector<double>::const_iterator value_it = values.begin();
 	std::vector<std::uint16_t>::const_iterator index_it = indices.begin();
 
-	//std::map<std::uint16_t, double>::iterator parameters_it = parameters.begin();
-
 	while (value_it != values.end()) {
-		printf("value: %d\n", *value_it);
 		parameters[*index_it] = *value_it;
 		++index_it;
 		++value_it;
@@ -340,6 +336,9 @@ void local_control::on_message(callback_type_type type, void *parameter)
 	assert(impl_->handle);
 
 	switch (type) {
+		case wrap::callback_type_type::MMI_CYCLIC_CALL:
+			break; // don't print cyclic call messages
+
 		case wrap::callback_type_type::MMI_ERROR_MSG: {
 			transfer_message *msg = static_cast<transfer_message *>(parameter);
 			const std::uint8_t task = msg->data[0];

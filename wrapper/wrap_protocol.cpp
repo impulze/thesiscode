@@ -254,6 +254,8 @@ bool valid_message_type(std::uint16_t check_type)
 			return true;
 		case wrap::message_type::CTRL_SEND_MESSAGE_RESPONSE:
 			return true;
+		case wrap::message_type::CTRL_MESSAGE:
+			return true;
 	}
 
 	return false;

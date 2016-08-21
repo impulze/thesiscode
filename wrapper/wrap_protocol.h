@@ -35,6 +35,7 @@ enum class message_type : std::uint16_t
 	CTRL_READ_PARAM_ARRAY_RESPONSE,
 	CTRL_SEND_MESSAGE,
 	CTRL_SEND_MESSAGE_RESPONSE,
+	CTRL_MESSAGE,
 };
 
 /*

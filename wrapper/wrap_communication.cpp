@@ -51,7 +51,7 @@ struct client_local_control
 {
 	client_local_control(client_data *client_data);
 
-	void handle_message(::wrap::callback_type_type type, void *parameter);
+	void on_message(::wrap::callback_type_type type, void *parameter) override;
 
 	client_data *client_data;
 };
@@ -1054,8 +1054,61 @@ client_local_control::client_local_control(struct client_data *client_data)
 {
 }
 
-void client_local_control::handle_message(::wrap::callback_type_type type, void *parameter)
+void send_msg_to_client(client_data *client_data, wrap::callback_type_type type, wrap::transfer_message const &msg)
 {
+	wrap::message com_msg(wrap::message_type::CTRL_MESSAGE);
+
+	com_msg.append(static_cast<std::uint16_t>(type));
+	com_msg.append(msg.controlblock0);
+	com_msg.append(msg.controlblock1);
+	com_msg.append(msg.controlblock2);
+	com_msg.append(msg.handle);
+	com_msg.append(msg.sender);
+	com_msg.append(msg.current_block_number);
+	com_msg.append(static_cast<std::uint16_t>(msg.data.size()));
+
+	for (auto const &element: msg.data) {
+		com_msg.append(element);
+	}
+
+	client_data->send_message(com_msg);
+}
+
+void client_local_control::on_message(::wrap::callback_type_type type, void *parameter)
+{
+	assert(client_data);
+
+	switch (type) {
+		case wrap::callback_type_type::MMI_CYCLIC_CALL:
+			break; // don't send cyclic call messages
+
+		case wrap::callback_type_type::MMI_ERROR_MSG: {
+			wrap::transfer_message *msg = static_cast<wrap::transfer_message *>(parameter);
+			send_msg_to_client(client_data, type, *msg);
+			break;
+		}
+
+		case wrap::callback_type_type::MMI_NCMSG_RECEIVED: {
+			wrap::transfer_message *msg = static_cast<wrap::transfer_message *>(parameter);
+			send_msg_to_client(client_data, type, *msg);
+			break;
+		}
+
+		case wrap::callback_type_type::MMI_UNIMPLEMENTED: {
+			const std::string exception_string = static_cast<const char *>(parameter);
+			wrap::message com_msg(wrap::message_type::CTRL_MESSAGE);
+			com_msg.append(static_cast<std::uint16_t>(type));
+			com_msg.append(exception_string);
+		}
+
+		default: {
+			const unsigned long parameter_long = *static_cast<unsigned long *>(parameter);
+			wrap::message com_msg(wrap::message_type::CTRL_MESSAGE);
+			com_msg.append(static_cast<std::uint16_t>(type));
+			com_msg.append(static_cast<std::uint32_t>(parameter_long));
+			break;
+		}
+	}
 }
 #endif
 
