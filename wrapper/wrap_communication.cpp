@@ -102,7 +102,7 @@ struct client_local_control
 	template <class... T>
 	client_local_control(T &&... args);
 
-	void handle_message(wrap::callback_type_type type, unsigned long parameter) override;
+	void handle_message(wrap::callback_type_type type, void *parameter) override;
 
 	std::string get_name() const;
 };
@@ -389,6 +389,7 @@ void client_data::send_message(wrap::message const &message)
 
 void client_data::send_response(wrap::message const &message)
 {
+	printf("sending response\n");
 	std::unique_ptr<wrap::message> response;
 
 #ifdef WIN32
@@ -588,7 +589,7 @@ void client_data::send_response(wrap::message const &message)
 
 			std::uint16_t position = 8;
 
-			for (std::uint16_t i = 0; i < size - 8; i++) {
+			for (std::uint16_t i = 0; i < size - 6; i++) {
 				msg.data.push_back(message.extract_bit8(position++));
 			}
 
@@ -624,8 +625,22 @@ client_local_control::client_local_control(T &&... args)
 {
 }
 
-void client_local_control::handle_message(wrap::callback_type_type type, unsigned long parameter)
+void client_local_control::handle_message(wrap::callback_type_type type, void *parameter)
 {
+	const unsigned long parameter_long = *static_cast<unsigned long *>(parameter);
+	switch (type) {
+		case wrap::callback_type_type::MMI_NCMSG_RECEIVED: {
+			wrap::transfer_message *msg = static_cast<wrap::transfer_message *>(parameter);
+
+			std::printf("CNC MESSAGE: %d %lu\n", msg->controlblock0, msg->controlblock1);
+
+			break;
+		}
+
+		default:
+			std::printf("DLL MESSAGE: %d %lu\n", type, parameter_long);
+			break;
+	}
 }
 #endif
 

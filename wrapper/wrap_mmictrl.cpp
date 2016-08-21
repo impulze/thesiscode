@@ -260,27 +260,44 @@ void local_control::send_message(transfer_message const &message)
 	em_message.len_us = message.data.size();
 	em_message.modul_uc = message.sender;
 
-	switch (msg.controlblock0) {
-		case SB0_AUFTRAG_KUC:
-			break;
-		default:
-			throw std::runtime_error("Only SB0_AUFTRAG_KUC messages supported.");
-	}
+	printf("msg size: %d\n", message.data.size());
+	switch (message.controlblock0) {
+		case SB0_AUFTRAG_KUC: {
+				if (message.controlblock1 == SB1_GET_PROGNAME_KUC) {
+					if (message.data.size() != 4) {
+						throw std::runtime_error("Invalid length for SB1_GET_PROGNAME_KUC.");
+					}
 
-	if (msg.controlblock1 == SB1_GET_PROGNAME_KUC) {
-		if (msg.data.size() != 4) {
-			throw std::runtime_error("Invalid length for SB1_GET_PROGNAME_KUC.");
+					std::uint32_t num;
+
+					std::memcpy(&num, message.data.data(), 4);
+
+					num = ntohl(num);
+
+					em_message.n.val_aul[0] = num;
+				} else {
+					throw std::runtime_error("Only some messages supported.");
+				}
+
+				break;
 		}
 
-		std::uint32_t num;
+		case SB0_RESET_KUC: {
+			if (message.controlblock1 == SB1_RESET_KUC) {
+				if (message.data.size() != 0) {
+					throw std::runtime_error("Invalid length for SB1_RESET_KUC.");
+				}
 
-		std::memcpy(&num, msg.data.data(), 4);
+				break;
+			} else {
+				throw std::runtime_error("Only some messages supported.");
+			}
 
-		num = ntohl(num);
+			break;
+		}
 
-		em_message.val_aul[0] = num;
-	} else {
-		throw std::runtime_error("Only SB1_GET_PROGNAME_KUC messages supported.");
+		default:
+			throw std::runtime_error("Only some messages supported.");
 	}
 
 	const BOOL result = ncrSendMessage_p(impl_->handle, &em_message);
@@ -516,11 +533,30 @@ void remote_control::read_param_array(std::map<std::uint16_t, double> &parameter
 namespace
 {
 
-void WINAPI callback(ULONG type, ULONG param, LPVOID context)
+void WINAPI callback(ULONG type, ULONG parameter, LPVOID context)
 {
 	for (auto &entry: g_control_mapping) {
 		if (entry.first == context) {
-			entry.second->handle_message(conversion_callback_type_type(type), param);
+			if (type == VK_MMI_NCMSG_RECEIVED) {
+				MSG_TR *em_message = reinterpret_cast<MSG_TR *>(parameter);
+
+				wrap::transfer_message msg = wrap::transfer_message();
+				msg.controlblock0 = em_message->sb0_uc;
+				msg.controlblock1 = em_message->sb1_uc;
+				msg.controlblock2 = em_message->sb2_uc;
+				msg.current_block_number = em_message->index_uc;
+				msg.handle = em_message->handle_uc;
+				msg.sender = em_message->modul_uc;
+
+				for (std::uint16_t i = 0; i < em_message->len_us; i++) {
+					msg.data.push_back(em_message->n.val_auc[i]);
+				}
+
+				entry.second->handle_message(conversion_callback_type_type(type), &msg);
+			} else {
+				entry.second->handle_message(conversion_callback_type_type(type), &parameter);
+			}
+
 			return;
 		}
 	}

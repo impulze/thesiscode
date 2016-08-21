@@ -55,7 +55,7 @@ struct my_remote_control
 	template <class... T>
 	my_remote_control(T &&... args);
 
-	void handle_message(wrap::callback_type_type type, unsigned long parameter) override;
+	void handle_message(wrap::callback_type_type type, void *parameter) override;
 };
 
 }
@@ -143,9 +143,10 @@ my_remote_control::my_remote_control(T &&... args)
 {
 }
 
-void my_remote_control::handle_message(wrap::callback_type_type type, unsigned long parameter)
+void my_remote_control::handle_message(wrap::callback_type_type type, void *parameter)
 {
-	std::printf("new message: %d %lu\n", static_cast<int>(type), parameter);
+	const unsigned long parameter_long = *static_cast<unsigned long *>(parameter);
+	std::printf("new message: %d %lu\n", static_cast<int>(type), parameter_long);
 }
 
 }

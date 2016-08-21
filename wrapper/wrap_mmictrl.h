@@ -224,7 +224,7 @@ struct control
 
 	// Callback für Steuerungs-Nachrichten
 	// Parameter: Aufruf-Typ, Zusatzparameter je nach Wert des Aufruf-Typs
-	virtual void handle_message(callback_type_type type, unsigned long param) = 0;
+	virtual void handle_message(callback_type_type type, void *parameter) = 0;
 };
 
 struct gateway
