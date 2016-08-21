@@ -38,6 +38,8 @@ enum class message_type : std::uint16_t
 	CTRL_MESSAGE,
 };
 
+char const *message_type_to_string(message_type type);
+
 /*
  * Message structure:
  * ==================
@@ -51,7 +53,8 @@ struct message
 	message(message_type type);
 
 	void to_bytes(std::vector<std::uint8_t> &bytes) const;
-	static std::unique_ptr<message> from_bytes(std::vector<uint8_t> &bytes);
+	static std::shared_ptr<message> from_bytes(std::vector<uint8_t> &bytes);
+	static std::shared_ptr<message> from_type(message_type type);
 
 	void append(std::string const &string);
 	void append(std::uint8_t byte);
@@ -62,6 +65,8 @@ struct message
 	std::uint8_t extract_bit8(std::uint16_t position) const;
 	std::uint16_t extract_bit16(std::uint16_t position) const;
 	std::uint32_t extract_bit32(std::uint16_t position) const;
+
+	char const *type_to_string() const;
 
 	const std::uint8_t version;
 	const message_type type;

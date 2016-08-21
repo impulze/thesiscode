@@ -2,9 +2,7 @@
 #define WRAP_MMICTRL_H_INCLUDED
 
 #include <cstdint>
-#include <functional>
 #include <map>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -17,10 +15,6 @@ struct error
 {
 	error(std::string const &message, std::uint32_t win32_error);
 
-#ifdef WIN32
-	static error create_error();
-#endif
-
 	const std::uint32_t win32_error;
 };
 
@@ -30,7 +24,7 @@ enum class init_status
 	FIRMWARE_ALREADY_LOADED
 };
 
-enum class callback_type_type
+enum class callback_type_type : std::uint8_t
 {
 	/*
 	 * Statusmeldungen für Firmwareübertragung zur Steuerung.
@@ -126,8 +120,6 @@ struct transfer_exception
 {
 	transfer_exception(std::string const &message, transfer_status_type type);
 
-	static transfer_exception create(transfer_status_type type);
-
 	const transfer_status_type type;
 };
 
@@ -136,10 +128,6 @@ struct transfer_exception_error
 	  transfer_exception
 {
 	transfer_exception_error(std::string const &message, transfer_status_type type, std::uint32_t win32_error);
-
-#ifdef WIN32
-	static transfer_exception_error create(transfer_status_type);
-#endif
 };
 
 struct transfer_message
@@ -153,10 +141,10 @@ struct transfer_message
 	std::vector<std::uint8_t> data;
 };
 
-struct control
+struct mmictrl
 {
 	// Schließen und Beenden der Steuerung
-	virtual ~control();
+	virtual ~mmictrl();
 
 	// Zeiger auf Dual-Port-RAM der Steuerung
 	//virtual void *get_dpr_address() = 0;
@@ -238,55 +226,5 @@ struct gateway
 	virtual std::int32_t get_num_of_conns(std::int32_t number) = 0;
 };
 
-#ifdef WIN32
-struct local_control
-	: control
-{
-	local_control();
-	virtual ~local_control();
-
-	void open(std::string const &name);
-
-	bool get_init_state() override;
-	init_status load_firmware_blocked(std::string const &config_name) override;
-	void send_file_blocked(std::string const &name, std::string const &header,
-	                       transfer_block_type type) override;
-	void send_message(transfer_message const &message) override;
-	void read_param_array(std::map<std::uint16_t, double> &parameters) override;
-	//virtual bool write_param_array(std::map<std::uint16_t, double> &parameters) override;
-
-	void on_message(callback_type_type type, void *parameter) override;
-
-private:
-	struct local_impl;
-
-	local_impl *impl_;
-};
-#endif
-
-struct remote_control
-	: control
-{
-	remote_control();
-	virtual ~remote_control();
-
-	void open(std::string const &name, std::string const &address, std::uint16_t port);
-	bool get_init_state() override;
-	init_status load_firmware_blocked(std::string const &config_name) override;
-	void send_file_blocked(std::string const &name, std::string const &header,
-	                       transfer_block_type type) override;
-	void send_message(transfer_message const &message) override;
-	void read_param_array(std::map<std::uint16_t, double> &parameters) override;
-	//virtual bool write_param_array(std::map<std::uint16_t, double> &parameters) override;
-
-	void on_message(callback_type_type type, void *parameter) override;
-
-private:
-	struct remote_impl;
-
-	remote_impl *impl_;
-};
-
 }
-
 #endif

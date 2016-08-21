@@ -491,7 +491,7 @@ int OpcServerMain(const char* szAppPath)
 		pServer->setServerConfig(sConfigFileName, szAppPath);
 
 	NodeManager *manager;
-	UaServerApplicationModule *module;
+	//UaServerApplicationModule *module;
 
         manager = new OpcUaDi::NodeManagerDevices();
         pServer->addNodeManager(manager);

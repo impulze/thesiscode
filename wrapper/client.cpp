@@ -1,4 +1,5 @@
-#include "wrap_communication.h"
+#include "wrap_client.h"
+#include "wrap_server.h"
 #include "wrap_mmictrl.h"
 #include "wrap_protocol.h"
 
@@ -67,7 +68,7 @@ int client_main(int argc, char **argv)
 
 	try {
 		wrap::remote_control ctrl;
-		ctrl.open("CNC1", "10.0.0.138", 44455);
+		ctrl.open("CNC1", "10.0.0.138", 44465);
 		printf("init: %d\n", ctrl.get_init_state());
 		wrap::init_status status = ctrl.load_firmware_blocked("C:\\Eckelmann\\StdHMI\\log\\download.cfg");
 		printf("firmware update: %d\n", status);
@@ -93,6 +94,7 @@ int client_main(int argc, char **argv)
 
 		ctrl.send_message(msg);
 
+#if 0
 		std::map<std::uint16_t, double> parameters;
 		for (int i = 0; i < 1024; i++) {
 			parameters[i] = 0;
@@ -113,6 +115,7 @@ int client_main(int argc, char **argv)
 				std::printf("param changed [%d]: %g -> %g\n", i, old_value, new_value);
 			}
 		}
+#endif
 	} catch (std::exception const &exception) {
 		std::fprintf(stderr, "Exception while running client.\n%s\n", exception.what());
 #ifdef WIN32

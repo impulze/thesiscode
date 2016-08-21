@@ -6,6 +6,8 @@
 /uaserver/pkiserver/
 /uaserver/uaserver
 /wrapper/objs/
+/wrapper/*.d
 /wrapper/lib/
 /adapter/objs/
+/adapter/*.d
 /adapter/lib/

@@ -1,5 +1,9 @@
 #include <wrapper/wrapper.h>
 #include "wrap_mmictrl.h"
+#ifdef WIN32
+#include "wrap_mmictrl_local.h"
+#endif
+#include "wrap_mmictrl_remote.h"
 
 #include <condition_variable>
 #include <cstring>
@@ -31,7 +35,7 @@ struct wrapper::impl
 
 	::adapter::xml_node_type configuration;
 	::adapter::xml_node_map_type nodes;
-	std::unique_ptr<wrap::control> ctrl;
+	std::unique_ptr<wrap::mmictrl> ctrl;
 	std::map<::adapter::xml_node_type const *, internal_function_callback_type> watched_nodes;
 	std::map<std::uint16_t, ::adapter::xml_node_type const *> watched_pfields;
 	std::mutex mutex;
@@ -270,12 +274,12 @@ void wrapper::run()
 
 #ifdef WIN32
 	if (impl_->is_local) {
-		std::unique_ptr<wrap::local_control> lctrl(new wrap::local_control());
+		std::unique_ptr<wrap::mmictrl_local> lctrl(new wrap::mmictrl_local());
 		lctrl->open(impl_->cnc_name);
 		impl_->ctrl = std::move(lctrl);
 	} else {
 #endif
-		std::unique_ptr<wrap::remote_control> rctrl(new wrap::remote_control());
+		std::unique_ptr<wrap::mmictrl_remote> rctrl(new wrap::mmictrl_remote());
 		rctrl->open(impl_->cnc_name, impl_->host, impl_->port);
 		impl_->ctrl = std::move(rctrl);
 #ifdef WIN32

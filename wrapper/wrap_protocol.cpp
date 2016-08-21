@@ -1,5 +1,6 @@
 #include "wrap_protocol.h"
 
+#include <cassert>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -39,9 +40,9 @@ void message::to_bytes(std::vector<std::uint8_t> &bytes) const
 	bytes.insert(bytes.end(), contents.begin(), contents.end());
 }
 
-std::unique_ptr<message> message::from_bytes(std::vector<std::uint8_t> &bytes)
+std::shared_ptr<message> message::from_bytes(std::vector<std::uint8_t> &bytes)
 {
-	std::unique_ptr<message> message;
+	std::shared_ptr<message> message;
 
 	if (bytes.size() < 6) {
 		std::printf("Not enough message data yet.\n");
@@ -97,6 +98,11 @@ std::unique_ptr<message> message::from_bytes(std::vector<std::uint8_t> &bytes)
 	bytes.erase(bytes.begin(), bytes.begin() + message->size);
 
 	return message;
+}
+
+std::shared_ptr<message> message::from_type(message_type type)
+{
+	return std::shared_ptr<message>(new message(type));
 }
 
 void message::append(std::string const &string)
@@ -215,6 +221,38 @@ std::uint32_t message::extract_bit32(std::uint16_t position) const
 	std::uint32_t number = ntohl(nnumber);
 
 	return number;
+}
+
+char const *message::type_to_string() const
+{
+	return wrap::message_type_to_string(type);
+}
+
+char const *message_type_to_string(message_type type)
+{
+	switch (type) {
+		case message_type::OK: return "OK";
+		case message_type::SERVER_ERROR: return "SERVER_ERROR";
+		case message_type::CTRL_OPEN: return "CTRL_OPEN";
+		case message_type::CTRL_OPEN_RESPONSE: return "CTRL_OPEN_RESPONSE";
+		case message_type::CTRL_CLOSE: return "CTRL_CLOSE";
+		case message_type::CTRL_CLOSE_RESPONSE: return "CTRL_CLOSE_RESPONSE";
+		case message_type::CTRL_GET_INIT: return "CTRL_GET_INIT";
+		case message_type::CTRL_GET_INIT_RESPONSE: return "CTRL_GET_INIT_RESPONSE";
+		case message_type::CTRL_LOAD_FIRMWARE_BLOCKED: return "CTRL_LOAD_FIRMWARE_BLOCKED";
+		case message_type::CTRL_LOAD_FIRMWARE_BLOCKED_RESPONSE: return "CTRL_LOAD_FIRMWRAE_BLOCKED_RESPONSE";
+		case message_type::CTRL_SEND_FILE_BLOCKED: return "CTRL_SEND_FILE_BLOCKED";
+		case message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE: return "CTRL_SEND_FILE_BLOCKED_RESPONSE";
+		case message_type::CTRL_READ_PARAM_ARRAY: return "CTRL_READ_PARAM_ARRAY";
+		case message_type::CTRL_READ_PARAM_ARRAY_RESPONSE: return "CTRL_READ_PARAM_ARRAY_RESPONSE";
+		case message_type::CTRL_SEND_MESSAGE: return "CTRL_SEND_MESSAGE";
+		case message_type::CTRL_SEND_MESSAGE_RESPONSE: return "CTRL_SEND_MESSAGE_RESPONSE";
+		case message_type::CTRL_MESSAGE: return "CTRL_MESSAGE";
+	}
+
+	assert(false);
+	// make visual studio happy
+	throw;
 }
 
 }
