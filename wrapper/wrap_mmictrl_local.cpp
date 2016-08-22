@@ -322,7 +322,6 @@ void mmictrl_local::impl::internal_callback(ULONG type, ULONG parameter, mmictrl
 	std::vector<std::uint8_t> data;
 	const wrap::callback_type_type cpp_type = conversion_to_callback_type_type(type);
 	data.resize(5);
-	std::uint32_t size = 5;
 	data[0] = static_cast<std::uint8_t>(cpp_type);
 	auto func = ctrl->get_message_callback();
 	bool called = false;
@@ -351,7 +350,7 @@ void mmictrl_local::impl::internal_callback(ULONG type, ULONG parameter, mmictrl
 		called = true;
 	};
 
-	if (type == VK_MMI_NCMSG_RECEIVED ||type == VK_MMI_ERROR_MSG) {
+	if (type == VK_MMI_NCMSG_RECEIVED || type == VK_MMI_ERROR_MSG) {
 		try {
 			msg = eckelmann_to_cpp_message(parameter);
 		} catch (std::exception const &exception) {
@@ -378,10 +377,6 @@ void mmictrl_local::impl::internal_callback(ULONG type, ULONG parameter, mmictrl
 			break;
 
 		case callback_type_type::MMI_NCMSG_RECEIVED:
-			printf("data: %d\n", msg.data.size());
-			std::uint32_t guess;
-			std::memcpy(&guess, msg.data.data(), 4);
-			printf("guess: %d\n", guess);
 			if (func) {
 				msg_append();
 				call();
@@ -392,14 +387,14 @@ void mmictrl_local::impl::internal_callback(ULONG type, ULONG parameter, mmictrl
 		case callback_type_type::MMI_ERROR_MSG: {
 			const std::uint8_t task = msg.data[0];
 			const std::uint8_t cls = msg.data[1];
-			std::int16_t num;
+			std::uint16_t num;
 			std::memcpy(&num, msg.data.data() + 2, 2);
 			const char *format = reinterpret_cast<char *>(msg.data.data() + 4);
 			const char *str_data = reinterpret_cast<char *>(msg.data.data() + 84);
 			char error_msg[1024];
 			snprintf(error_msg, sizeof error_msg, format, str_data);
 			last_error = msg;
-			std::printf("CNC ERROR: [task: %d, class: %d, num: %hd] [%s]\n", task, cls, num, error_msg);
+			std::printf("CNC ERROR: [task: %d, class: %d, num: %hd] [%s]\n", task,  cls, num, error_msg);
 
 			if (func) {
 				call();
@@ -448,7 +443,7 @@ void mmictrl_local::open(std::string const &name)
 	impl->handle = NULL;
 	impl->name = name;
 
-	auto callback = [&impl](ULONG type, ULONG parameter, mmictrl_local *ctrl) {
+	auto callback = [impl](ULONG type, ULONG parameter, mmictrl_local *ctrl) {
 		impl->internal_callback(type, parameter, ctrl);
 	};
 
@@ -552,12 +547,14 @@ void mmictrl_local::send_message(transfer_message const &message)
 	 * so clear last error and hope there's a meaningful error after failure
 	 */
 
-	impl_->last_error = wrap::transfer_message();
+	wrap::transfer_message msg = {};
+	impl_->last_error = msg;
 	const BOOL result = ncrSendMessage_p(impl_->handle, &em_message);
 
 	if (result == TRUE) {
 		return;
 	}
+
 	auto error = create_error();
 
 	if (error.win32_error != 0) {

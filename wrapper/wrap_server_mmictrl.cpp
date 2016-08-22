@@ -24,9 +24,11 @@ struct server_mmictrl::impl
 {
 	void send_response_to_client(std::shared_ptr<server::client> const &client,
 	                             std::shared_ptr<message> const &response);
-	std::vector<local_client>::iterator find_local_client(std::shared_ptr<server::client> const &wrap_client);
+	std::vector<std::shared_ptr<local_client>>::iterator find_local_client(std::shared_ptr<server::client> const &wrap_client);
+	void callback(std::uint8_t *data, std::shared_ptr<local_client> const &client, server_mmictrl *server);
 
-	std::vector<local_client> clients;
+	std::vector<std::shared_ptr<local_client>> clients;
+	server_mmictrl *server;
 };
 
 }
@@ -38,14 +40,17 @@ template <class T>
 bool try_and_fail(T const &func, std::shared_ptr<wrap::message> &response)
 {
 	try {
+printf("trying: %s\n", response->type_to_string());
 		func();
 		return true;
 	} catch (wrap::error const &error) {
+printf("failed: %s\n", response->type_to_string());
 		std::fprintf(stderr, "%s\n", error.what());
 		response->append(static_cast<std::uint8_t>(1));
 		response->append(error.what());
 		response->append(error.win32_error);
 	} catch (std::exception const &exception) {
+printf("failed: %s\n", response->type_to_string());
 		std::fprintf(stderr, "%s\n", exception.what());
 		response->append(static_cast<std::uint8_t>(2));
 		response->append(exception.what());
@@ -59,15 +64,35 @@ bool try_and_fail(T const &func, std::shared_ptr<wrap::message> &response)
 namespace wrap
 {
 
-std::vector<local_client>::iterator server_mmictrl::impl::find_local_client(std::shared_ptr<server::client> const &wrap_client)
+std::vector<std::shared_ptr<local_client>>::iterator server_mmictrl::impl::find_local_client(std::shared_ptr<server::client> const &wrap_client)
 {
 	for (auto it = clients.begin(); it != clients.end(); ++it) {
-		if (it->wrap_client == wrap_client) {
+		if ((*it)->wrap_client == wrap_client) {
 			return it;
 		}
 	}
 
 	throw std::runtime_error("Underlying client no longer present in local client list.");
+}
+
+void server_mmictrl::impl::callback(std::uint8_t *data, std::shared_ptr<local_client> const &client, server_mmictrl *server)
+{
+	auto msg = wrap::message::from_type(wrap::message_type::CTRL_MESSAGE);
+	std::uint32_t size = 0;
+
+	size |= static_cast<std::uint32_t>(data[1]) << 24;
+	size |= static_cast<std::uint32_t>(data[2]) << 16;
+	size |= static_cast<std::uint32_t>(data[3]) << 8;
+	size |= static_cast<std::uint32_t>(data[4]) << 0;
+
+	msg->append(data[0]);
+	msg->append(size);
+
+	for (std::uint16_t i = 0; i < size - 5; i++) {
+		msg->append(data[i + 5]);
+	}
+
+	server->send_message_to_client(client->wrap_client, msg);
 }
 
 server_mmictrl::server_mmictrl(std::string const &address, std::uint16_t port)
@@ -78,9 +103,12 @@ server_mmictrl::server_mmictrl(std::string const &address, std::uint16_t port)
 
 void server_mmictrl::on_client_new(std::shared_ptr<client> const &client)
 {
-	local_client local_client;
-	local_client.ctrl.reset(new mmictrl_local());
-	local_client.wrap_client = client;
+	std::shared_ptr<local_client> local_client(new local_client());
+	local_client->wrap_client = client;
+	local_client->ctrl.reset(new mmictrl_local());
+	local_client->ctrl->set_message_callback([this, local_client](std::uint8_t *data) {
+		impl_->callback(data, local_client, this);
+	});
 
 	impl_->clients.push_back(local_client);
 }
@@ -104,7 +132,7 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 			response = message::from_type(message_type::CTRL_OPEN_RESPONSE);
 			const std::string name = message->extract_string(0);
 			auto const func = [&lclient, &name]() {
-				lclient.ctrl->open(name);
+				lclient->ctrl->open(name);
 			};
 			const bool result = try_and_fail(func, response);
 
@@ -134,7 +162,7 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 			response = message::from_type(message_type::CTRL_GET_INIT_RESPONSE);
 			bool state;
 			auto const func = [&lclient, &state]() {
-				lclient.ctrl->get_init_state();
+				lclient->ctrl->get_init_state();
 			};
 			const bool result = try_and_fail(func, response);
 
@@ -151,7 +179,7 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 			const std::string config_name = message->extract_string(0);
 			init_status status;
 			auto const func = [&lclient, &config_name, &status]() {
-				status = lclient.ctrl->load_firmware_blocked(config_name);
+				status = lclient->ctrl->load_firmware_blocked(config_name);
 			};
 			const bool result = try_and_fail(func, response);
 
@@ -169,7 +197,7 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 			const std::string header = message->extract_string(static_cast<std::uint16_t>(2 + name.size()));
 			const transfer_block_type type = static_cast<transfer_block_type>(message->extract_bit8(static_cast<std::uint16_t>(2 + name.size() + 2 + header.size())));
 			auto const func = [&lclient, &name, &header, &type]() {
-				lclient.ctrl->get_init_state();
+				lclient->ctrl->get_init_state();
 			};
 			const bool result = try_and_fail(func, response);
 
@@ -194,7 +222,7 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 			}
 
 			auto const func = [&lclient, &parameters]() {
-				lclient.ctrl->read_param_array(parameters);
+				lclient->ctrl->read_param_array(parameters);
 			};
 			const bool result = try_and_fail(func, response);
 
@@ -230,7 +258,7 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 			}
 
 			auto const func = [&lclient, &msg]() {
-				lclient.ctrl->send_message(msg);
+				lclient->ctrl->send_message(msg);
 			};
 			const bool result = try_and_fail(func, response);
 
@@ -238,6 +266,7 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 				response->append(static_cast<std::uint8_t>(0));
 			}
 
+printf("breaking\n");
 			break;
 		}
 	}

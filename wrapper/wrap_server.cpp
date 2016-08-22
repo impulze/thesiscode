@@ -333,13 +333,12 @@ bool server::run_one(int timeout_ms)
 			continue;
 		}
 
-		if (pollfd.revents & (POLLIN|POLLHUP)) {
+		if (pollfd.revents & (POLLERR|POLLHUP)) {
 			if (pollfd.fd == impl_->socket) {
 				throw std::runtime_error("Server socket invalid.");
 			}
 
-			
-			std::fprintf(stderr, "Server <%s> socket invalid.\nClient will be removed.\n",
+			std::fprintf(stderr, "Client <%s> socket invalid.\nClient will be removed.\n",
 		             client->impl_->address_string.c_str());
 			impl_->remove_client(client);
 
