@@ -40,18 +40,15 @@ template <class T>
 bool try_and_fail(T const &func, std::shared_ptr<wrap::message> &response)
 {
 	try {
-printf("trying: %s\n", response->type_to_string());
 		func();
 		return true;
 	} catch (wrap::error const &error) {
-printf("failed: %s\n", response->type_to_string());
-		std::fprintf(stderr, "%s\n", error.what());
+		std::fprintf(stderr, "try_and_fail: %s\n", error.what());
 		response->append(static_cast<std::uint8_t>(1));
 		response->append(error.what());
 		response->append(error.win32_error);
 	} catch (std::exception const &exception) {
-printf("failed: %s\n", response->type_to_string());
-		std::fprintf(stderr, "%s\n", exception.what());
+		std::fprintf(stderr, "try_and_fail: %s\n", exception.what());
 		response->append(static_cast<std::uint8_t>(2));
 		response->append(exception.what());
 	}
@@ -228,11 +225,11 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 
 			if (result) {
 				response->append(static_cast<std::uint8_t>(0));
-			}
 
-			for (auto const &parameter : parameters) {
-				const std::string double_string = std::to_string(parameter.second);
-				response->append(double_string);
+				for (auto const &parameter : parameters) {
+					const std::string double_string = std::to_string(parameter.second);
+					response->append(double_string);
+				}
 			}
 
 			break;
@@ -266,7 +263,6 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 				response->append(static_cast<std::uint8_t>(0));
 			}
 
-printf("breaking\n");
 			break;
 		}
 	}

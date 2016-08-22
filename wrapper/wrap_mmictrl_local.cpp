@@ -109,7 +109,7 @@ void throw_transfer_exception(wrap::transfer_status_type type)
 
 void WINAPI callback(ULONG type, ULONG parameter, LPVOID context)
 {
-	wrap::mmictrl_local *ctrl;
+	wrap::mmictrl_local *ctrl = NULL;
 	std::function<void(ULONG, ULONG, wrap::mmictrl_local *)> internal_callback;
 
 	for (auto it = g_controls.begin(); it != g_controls.end(); ++it) {
@@ -121,17 +121,22 @@ void WINAPI callback(ULONG type, ULONG parameter, LPVOID context)
 	}
 
 	if (ctrl == NULL) {
+		// HACK: why does it do this?
+		if (type == VK_MMI_CYCLIC_CALL) {
+			return;
+		}
+
 		std::fprintf(stderr, "The CNC has sent a message although we already sent ncrClose.\n");
 		return;
 	}
 
 	try {
 		internal_callback(type, parameter, ctrl);
-		return;
 	} catch (std::exception const &exception) {
-		std::fprintf(stderr, "Calling message callback failed: %s\nClosing connection.", exception.what());
+		std::fprintf(stderr, "Calling message callback failed: %s\nClosing connection.\n", exception.what());
 		ctrl->close();
 	}
+
 }
 
 wrap::transfer_message eckelmann_to_cpp_message(ULONG parameter)
