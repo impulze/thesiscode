@@ -213,6 +213,9 @@ struct mmictrl
 	// Callback für Steuerungs-Nachrichten
 	// Parameter: Aufruf-Typ, Zusatzparameter je nach Wert des Aufruf-Typs
 	virtual void on_message(callback_type_type type, void *parameter) = 0;
+
+	// Reset CNC
+	void reset();
 };
 
 struct gateway

@@ -26,4 +26,15 @@ mmictrl::~mmictrl()
 {
 }
 
+void mmictrl::reset()
+{
+	wrap::transfer_message msg = wrap::transfer_message();
+
+	// reset
+	msg.controlblock0 = 85;
+	msg.controlblock1 = 170;
+
+	send_message(msg);
+}
+
 }

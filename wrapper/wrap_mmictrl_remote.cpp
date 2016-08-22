@@ -308,9 +308,9 @@ void mmictrl_remote::send_message(transfer_message const &message)
 		return;
 	}
 
-	const std::string error_string = response->extract_string(0);
+	const std::string error_string = response->extract_string(1);
 	const std::uint16_t string_size = static_cast<std::uint16_t>(error_string.size());
-	const std::uint32_t win32_error = response->extract_bit32(2 + string_size);
+	const std::uint32_t win32_error = response->extract_bit32(1 + 2 + string_size);
 
 	char new_error_string[1024];
 	snprintf(new_error_string, sizeof new_error_string,
