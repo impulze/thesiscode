@@ -13,18 +13,8 @@ namespace
 
 void sigint_handler(int signal);
 
-struct example_client
-	: wrap::client
-{
-	example_client(std::string const &address, std::uint16_t port);
-
-	void send_message(std::shared_ptr<wrap::message> const &message);
-
-	void on_message(std::shared_ptr<wrap::message> const &message) override;
-};
-
 bool g_run_client = true;
-std::unique_ptr<example_client> g_client;
+std::unique_ptr<wrap::client> g_client;
 
 }
 
@@ -38,18 +28,29 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	std::unique_ptr<example_client> example_client;
-	example_client.reset(new struct example_client(argv[1], std::stoi(argv[2])));
+	std::unique_ptr<wrap::client> example_client;
+	example_client.reset(new wrap::client);
 
 	g_client = std::move(example_client);
+
+	g_client->connect(argv[1], std::stoi(argv[2]));
 
 	std::signal(SIGINT, sigint_handler);
 
 	try {
+		const std::shared_ptr<wrap::message> ok_message(new wrap::message(wrap::message_type::OK));
+		std::shared_ptr<wrap::message> response;
+
 		while (g_run_client) {
-			std::shared_ptr<wrap::message> message(new wrap::message(wrap::message_type::OK));
-			g_client->send_message(message);
-			g_client->run_one(1000);
+			g_client->send_message(ok_message);
+			auto response = g_client->recv_message();
+			if (response) {
+				std::printf("new message: [type=%d, size=%hu]\n",
+					static_cast<int>(response->type), response->size);
+			} else {
+				std::printf("no response received, exiting");
+				return 0;
+			}
 		}
 
 		return 0;
@@ -66,22 +67,6 @@ void sigint_handler(int signal)
 {
 	std::printf("Received CTRL+C, exiting...\n");
 	g_run_client = false;
-}
-
-example_client::example_client(std::string const &address, std::uint16_t port)
-	: client(address, port)
-{
-}
-
-void example_client::send_message(std::shared_ptr<wrap::message> const &message)
-{
-	return client::send_message(message);
-}
-
-void example_client::on_message(std::shared_ptr<wrap::message> const &message)
-{
-	std::printf("new message: [type=%d, size=%hu]\n",
-	            static_cast<int>(message->type), message->size);
 }
 
 }

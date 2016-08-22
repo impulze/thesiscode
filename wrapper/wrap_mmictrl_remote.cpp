@@ -3,6 +3,11 @@
 #include "wrap_protocol.h"
 #include "wrap_misc.h"
 
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
 #ifdef WIN32
 #define snprintf sprintf_s
 #else
@@ -15,21 +20,6 @@ namespace
 void check_server_error(std::shared_ptr<wrap::message> const &response);
 void check_correct_response_type(std::shared_ptr<wrap::message> const &response, wrap::message_type type);
 wrap::callback_type_type conversion_to_callback_type(std::uint8_t type);
-
-struct mmictrl_client
-	: wrap::client
-{
-	mmictrl_client(std::string const &address, std::uint16_t port);
-
-	// interface is protected, we need to call it from the implementation
-	void send_message(std::shared_ptr<wrap::message> const &message);
-
-	void on_message(std::shared_ptr<wrap::message> const &message) override;
-
-	std::shared_ptr<wrap::message> last_message_received;
-	bool waiting_for_reply;
-	wrap::mmictrl_remote *remote;
-};
 
 }
 
@@ -44,7 +34,14 @@ struct mmictrl_remote::impl
 	                                               int timeout, message_type expected_type);
 
 	std::string name;
-	std::shared_ptr<mmictrl_client> client;
+	wrap::client client;
+	std::thread client_thread;
+	std::mutex mutex;
+	std::condition_variable message_received_condition;
+	std::shared_ptr<message> last_message_received;
+	mmictrl_remote *remote;
+	std::exception_ptr exception_ptr;
+	bool run_client;
 };
 
 }
@@ -58,8 +55,8 @@ void check_server_error(std::shared_ptr<wrap::message> const &response)
 		const std::string error_string = response->extract_string(0);
 		char exception_string[1024];
 		snprintf(exception_string, sizeof exception_string,
-		         "[MMICTRL] A server error occured at remote CNC.\n"
-		         "[MMICTRL] %s\n", error_string.c_str());
+		         "A server error occured at remote CNC.\n"
+		         "%s\n", error_string.c_str());
 		throw std::runtime_error(exception_string);
 	}
 }
@@ -69,7 +66,7 @@ void check_correct_response_type(std::shared_ptr<wrap::message> const &response,
 	if (response->type != type) {
 		char exception_string[1024];
 		snprintf(exception_string, sizeof exception_string,
-		         "[MMICTRL] Server sent unexpected response [%s], expected [%s].\n",
+		         "Server sent unexpected response [%s], expected [%s].\n",
 		         wrap::message_type_to_string(response->type),
 		         wrap::message_type_to_string(type));
 		throw std::runtime_error(exception_string);
@@ -78,8 +75,8 @@ void check_correct_response_type(std::shared_ptr<wrap::message> const &response,
 
 wrap::callback_type_type conversion_to_callback_type(std::uint8_t type)
 {
-#define CONVHELP(x) case wrap::callback_type_type::##x: return wrap::callback_type_type::##x;
-	switch (type) {
+#define CONVHELP(x) case wrap::callback_type_type::x: return wrap::callback_type_type::x;
+	switch (static_cast<wrap::callback_type_type>(type)) {
 		CONVHELP(MMI_DOWNLOAD_STATE)
 		CONVHELP(MMI_DOWNLOAD_PART)
 		CONVHELP(MMI_DOWNLOAD_COMPLETE)
@@ -102,39 +99,6 @@ wrap::callback_type_type conversion_to_callback_type(std::uint8_t type)
 	throw std::runtime_error("Conversion not possible.");
 }
 
-mmictrl_client::mmictrl_client(std::string const &address, std::uint16_t port)
-	: wrap::client(address, port)
-{
-}
-
-void mmictrl_client::send_message(std::shared_ptr<wrap::message> const &message)
-{
-	wrap::client::send_message(message);
-}
-
-void mmictrl_client::on_message(std::shared_ptr<wrap::message> const &message)
-{
-	if (waiting_for_reply) {
-		last_message_received = message;
-		return;
-	} else {
-		switch (message->type) {
-			case wrap::message_type::CTRL_MESSAGE: {
-				wrap::callback_function_type func = remote->get_message_callback();
-
-				if (func) {
-					func(message->contents.data());
-				}
-
-				break;
-			}
-
-			default:
-				throw std::runtime_error("Received unexpected message.");
-		}
-	}
-}
-
 }
 
 namespace wrap
@@ -143,17 +107,51 @@ namespace wrap
 std::shared_ptr<message>
 mmictrl_remote::impl::send_message_and_wait(std::shared_ptr<message> const &message, int timeout)
 {
-	client->send_message(message);
-	client->waiting_for_reply = true;
-	client->last_message_received.reset();
-	client->waiting_for_reply = false;
-	client->run_one(timeout);
+if (message->type == wrap::message_type::CTRL_CLOSE) printf("closing impl\n");
+printf("interrupting\n");
+	client.interrupt();
+printf("wakeup condition was true\n");
 
-	if (client->last_message_received) {
-		check_server_error(client->last_message_received);
+	client.send_message(message);
+
+	auto stop = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout);
+	std::shared_ptr<wrap::message> response;
+
+	while (true) {
+		std::unique_lock<std::mutex> lock(mutex);
+		auto status = message_received_condition.wait_until(lock, stop);
+
+printf("message received condition was true\n");
+		if (status == std::cv_status::timeout) {
+printf("timeout: %d\n", timeout);
+			return std::shared_ptr<wrap::message>();
+		}
+
+		response = last_message_received;
+		last_message_received.reset();
+
+		if (response) {
+			check_server_error(response);
+
+			printf("response received: %s\n", response->type_to_string());
+
+			if (response->type == wrap::message_type::CTRL_MESSAGE) {
+				wrap::callback_function_type func = remote->get_message_callback();
+
+				if (func) {
+					try {
+						func(response->contents.data());
+					} catch (std::exception const &exception) {
+						std::fprintf(stderr, "User callback exception: %s\n", exception.what());
+					}
+				}
+
+				continue;
+			}
+
+			return response;
+		}
 	}
-
-	return client->last_message_received;
 }
 
 std::shared_ptr<message>
@@ -165,7 +163,7 @@ mmictrl_remote::impl::send_message_and_wait(std::shared_ptr<message> const &mess
 	if (!response) {
 		throw exception_from_sprintf(1024,
 			"Did not receive a message of type [%s] in [%d ms].\n",
-			message->type_to_string(), timeout);
+			message_type_to_string(expected_type), timeout);
 	}
 
 	check_correct_response_type(response, expected_type);
@@ -179,7 +177,7 @@ mmictrl_remote::mmictrl_remote()
 
 mmictrl_remote::~mmictrl_remote()
 {
-	if (!impl_) {
+	if (impl_) {
 		close();
 	}
 }
@@ -190,13 +188,13 @@ void mmictrl_remote::open(std::string const &name, std::string const &address, s
 		throw std::runtime_error("[MMICTRL] Control already opened.");
 	}
 
-	std::shared_ptr<impl> impl(new mmictrl_remote::impl());
+	std::shared_ptr<impl> impl(new mmictrl_remote::impl);
 
+	impl->remote = this;
 	impl->name = name;
 
 	try {
-		impl->client.reset(new mmictrl_client(address, port));
-		impl->client->remote = this;
+		impl->client.connect(address, port);
 	} catch (std::exception const &exception) {
 		auto newexcp = exception_from_sprintf(1024,
 			"[MMICTRL] Opening CNC connection to [%s] failed.\n"
@@ -206,12 +204,28 @@ void mmictrl_remote::open(std::string const &name, std::string const &address, s
 
 	std::shared_ptr<message> response;
 
+	impl->run_client = true;
+	impl->client_thread = std::thread([impl]() {
+		while (impl->run_client) {
+			try {
+				auto response = impl->client.recv_message();
+				impl->last_message_received = response;
+				impl->message_received_condition.notify_one();
+			} catch (...) {
+				impl->exception_ptr = std::current_exception();
+			}
+		}
+	});
+
 	try {
 		auto message = message::from_type(message_type::CTRL_OPEN);
 		message->append(name);
 
 		response = impl->send_message_and_wait(message, 2000, message_type::CTRL_OPEN_RESPONSE);
 	} catch (std::exception const &exception) {
+		impl->run_client = false;
+		impl->client.interrupt();
+		impl->client_thread.join();
 		throw exception_from_sprintf(1024,
 			"[MMICTRL] Opening CNC connection [%s] failed.\n"
 			"[MMICTRL] %s\n", name.c_str(), exception.what());
@@ -221,6 +235,10 @@ void mmictrl_remote::open(std::string const &name, std::string const &address, s
 		std::printf("[MMICTRL] Opened CNC connection [%s] successfuly.\n", name.c_str());
 	} else {
 		const std::string error_string = response->extract_string(1);
+
+		impl->run_client = false;
+		impl->client.interrupt();
+		impl->client_thread.join();
 
 		throw exception_from_sprintf(1024,
 			"[MMICTRL] Opening CNC connection [%s] failed.\n"

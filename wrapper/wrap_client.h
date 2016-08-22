@@ -12,18 +12,14 @@ struct message;
 
 struct client
 {
-	client(std::string const &address, std::uint16_t port);
+	client();
 	virtual ~client();
 
-	bool run_one(int timeout_ms);
-
-protected:
+	void connect(std::string const &address, std::uint16_t port);
+	void interrupt();
 	void send_message(std::shared_ptr<message> const &message);
+	std::shared_ptr<message> recv_message();
 
-private:
-	virtual void on_message(std::shared_ptr<message> const &message) = 0;
-
-private:
 	struct impl;
 	std::shared_ptr<impl> impl_;
 };

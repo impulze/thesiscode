@@ -1,5 +1,6 @@
 ADAPTER_DIR = ../adapter
 CXXFLAGS = -ggdb3 -std=c++11 -fPIC -D_GLIBCXX_USE_CXX11_ABI=0 -I$(ADAPTER_DIR)/include -Iinclude -fmax-errors=10 -Wall
+LDLIBS = -pthread
 LINK.o = $(CXX) $(LDFLAGS) $(TARGET_ARCH)
 
 SOURCES_BASE := \

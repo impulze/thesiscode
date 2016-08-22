@@ -64,21 +64,25 @@ server::impl::impl(std::string const &address, std::uint16_t port)
 		throw socket_error::create("socket");
 	}
 
-#ifndef WIN32
-#error "Unimplemented"
-#else
-	int set_result;
-
 	{
-		int opt = 1;
-		set_result = setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
-	}
-
-	if (set_result == SOCKET_ERROR) {
-		close_socket(socket);
-		throw socket_error::create("setsockopt");
-	}
+		int enable = 1;
+#ifdef WIN32
+		const char *enable_ptr = reinterpret_cast<const char *>(&enable);
+#else
+		void *enable_ptr = &enable;
 #endif
+
+		int set_result = setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, enable_ptr, sizeof(int));
+
+#ifdef WIN32
+		if (set_result == SOCKET_ERROR) {
+#else
+		if (set_result != 0) {
+#endif
+			close_socket(socket);
+			throw socket_error::create("setsockopt");
+		}
+	}
 
 	int result = bind(socket, reinterpret_cast<const sockaddr *>(&used_entry.address), used_entry.address_length);
 
