@@ -8,6 +8,11 @@
 namespace wrap
 {
 
+inline std::uint16_t htole(std::uint16_t other);
+inline std::uint32_t htole(std::uint32_t other);
+inline std::uint16_t letoh(std::uint16_t other);
+inline std::uint32_t letoh(std::uint32_t other);
+
 struct errno_error
 	: std::runtime_error
 {
@@ -26,5 +31,7 @@ void initialize_wsa();
 #endif
 
 }
+
+#include "wrap_misc_inl.h"
 
 #endif
