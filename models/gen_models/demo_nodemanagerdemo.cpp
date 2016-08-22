@@ -403,6 +403,8 @@ void NodeManagerDemo::setup_node(adapter::xml_node_type const &node, UaNode *ua_
 				unit_info = UaEUInformation::fromUnitId(UaEUInformation::EngineeringUnit_millimetre_per_minute);
 			} else if (unit == "mm") {
 				unit_info = UaEUInformation::fromUnitId(UaEUInformation::EngineeringUnit_millimetre);
+			} else if (unit == "%") {
+				unit_info = UaEUInformation::fromUnitId(UaEUInformation::EngineeringUnit_percent);
 			} else {
 				char exception_string[1024];
 				snprintf(exception_string, sizeof exception_string, "Node <%s> unit <%s> cannot be setup in UA server.", node.browse_path.str().c_str(), unit.c_str());
@@ -641,6 +643,12 @@ void NodeManagerDemo::set_variable_from_node(adapter::xml_node_type const &node,
 		}
 	} else if (rank == -1) {
 		switch (data_type.identifierNumeric()) {
+			case OpcUaCncId_CncOperationMode: {
+				std::uint8_t operation_mode = data_position[0];
+std::printf("operation mode: %d\n", operation_mode);
+				variant.setInt32(data_position[0]);
+				break;
+			}
 			case OpcUaId_String: assign_ua_variable<OpcUa_String>(data_position, variant); break;
 			case OpcUaId_UInt32: assign_ua_variable<OpcUa_UInt32>(data_position, variant); break;
 			case OpcUaId_Double: assign_ua_variable<OpcUa_Double>(data_position, variant); break;

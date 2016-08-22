@@ -21,6 +21,8 @@
 #include <bitset>
 #include <iostream>
 
+#define CHANNEL1_OFFSET 51000
+
 namespace wrapper
 {
 
@@ -32,6 +34,7 @@ struct wrapper::impl
 	impl(::adapter::xml_node_type const &configuration);
 
 	void setup(::adapter::xml_node_map_type const &nodes);
+	void cnc_callback(std::uint8_t *data, wrapper *wrapper);
 
 	::adapter::xml_node_type configuration;
 	::adapter::xml_node_map_type nodes;
@@ -113,6 +116,39 @@ void wrapper::impl::setup(::adapter::xml_node_map_type const &nodes)
 
 		host = connection_string.substr(0, pos);
 		port = static_cast<std::uint16_t>(std::stoi(connection_string.substr(pos + 1)));
+	}
+}
+
+void wrapper::impl::cnc_callback(std::uint8_t *data, wrapper *wrapper)
+{
+	const wrap::callback_type_type cpp_type = static_cast<wrap::callback_type_type>(data[0]);
+
+	std::uint32_t size = 0;
+	size |= static_cast<std::uint32_t>(data[1]) << 24;
+	size |= static_cast<std::uint32_t>(data[2]) << 16;
+	size |= static_cast<std::uint32_t>(data[3]) << 8;
+	size |= static_cast<std::uint32_t>(data[4]) << 0;
+
+	if (cpp_type == wrap::callback_type_type::MMI_NCMSG_RECEIVED) {
+		wrap::transfer_message msg;
+		msg.controlblock0 = data[5];
+		msg.controlblock1 = data[6];
+		msg.controlblock2 = data[7];
+		msg.current_block_number = data[8];
+		msg.sender = data[9];
+		msg.handle = data[10];
+		msg.data.insert(msg.data.end(), data + 11, data + 11 + (size - 11));
+
+		if (msg.controlblock0 == 3 && msg.controlblock1 == 22) {
+			std::uint32_t prognum;
+			std::memcpy(&prognum, msg.data.data(), 4);
+			const std::string name(msg.data.data() + 4, msg.data.data() + msg.data.size());
+			std::printf("Progname response: [%d=%s]\n", prognum, name.c_str());
+		} else {
+			std::printf("NCMSG: [cb0=%d,cb1=%d]\n", msg.controlblock0, msg.controlblock1);
+		}
+	} else {
+		std::printf("Callback: [type=%d]\n", data[0]);
 	}
 }
 
@@ -234,8 +270,27 @@ void wrapper::watch_node(::adapter::xml_node_type const &node, ::adapter::xml_no
 		};
 
 		impl_->watched_nodes[&node] = gfunc_callback;
-		impl_->watched_pfields[559] = &node;
-	} else {
+		impl_->watched_pfields[CHANNEL1_OFFSET + 15] = &node;
+	} else if (node.browse_path.last().str() == "cnc:ActOperationMode") {
+		auto oper_callback = [callback](ntype node, fitype fetch_info) {
+			const std::string double_string(fetch_info.bytes.begin(), fetch_info.bytes.end());
+			const double value = std::stod(double_string);
+			const std::uint8_t operation_mode = static_cast<std::uint8_t>(value);
+
+			fetch_info.bytes.resize(1);
+			if (operation_mode == 0) {
+				// kein programm = manual
+				fetch_info.bytes[0] = 0;
+			} else {
+				// alles andere = automatisch (kein MDA)
+				fetch_info.bytes[0] = 2;
+			}
+
+			callback(node, fetch_info);
+		};
+		impl_->watched_nodes[&node] = oper_callback;
+		impl_->watched_pfields[CHANNEL1_OFFSET + 14] = &node;
+	} else if (node.browse_path.last().str() == "cnc:ActGFunctions") {
 		if (browse_name == "cnc:ActMainProgramFile") return;
 		//if (browse_name == "cnc:ActMainProgramLine") return;
 
@@ -286,6 +341,10 @@ void wrapper::run()
 	}
 #endif
 
+	impl_->ctrl->set_message_callback([this](std::uint8_t *data) {
+		impl_->cnc_callback(data, this);
+	});
+
 	timepoint last_update_try = clk::now();
 	last_update_try -= update_interval;
 
@@ -330,9 +389,8 @@ void wrapper::run()
 			lock.lock();
 		}
 
-		printf("read param returned\n");
-
 		for (auto const &entry: parameters) {
+std::cout << "PFIELD[" << entry.first << "=" << entry.second << "]\n";
 			auto pit = impl_->watched_pfields.find(entry.first);
 
 			if (pit == impl_->watched_pfields.end()) {

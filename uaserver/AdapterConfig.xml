@@ -74,7 +74,7 @@
 	<position>remote</position>
 
 	<!-- needed for remote cnc -->
-	<remote_info>10.0.0.138:44455</remote_info>
+	<remote_info>10.0.0.138:44452</remote_info>
 
 	<!-- the cnc name -->
 	<name>CNC1</name>
@@ -89,17 +89,17 @@
 	<!-- the data interface of a CNC machine -->
 	<vdw:object browse_name="CncInterface">
 
-		<?ignore
+<?ignore
 		<!-- file system entry point (not implemented yet) (optional) -->
 		<vdw:object browse_name="FileSystem"></vdw:object>
-		?>
+?>
 
-		<?ignore
+<?ignore
 		<!-- bug fix version of VDW CNC companion specification [string] (optional) -->
 		<vdw:variable browse_name="Fix">
 			<value kind="fix">1</value>
 		</vdw:variable>
-		?>
+?>
 
 		<!-- revision of VDW CNC companion specification [string] -->
 		<vdw:variable browse_name="Revision">
@@ -133,7 +133,7 @@
 					<value kind="fix" range_start="0" range_end="100000" unit="mm/min">0</value>
 				</vdw:variable>
 
-				<!-- active g functions [uint32 array] TODO: Nicht alle vorhanden? -->
+				<!-- active G functions [uint32 array] TODO: Nicht alle vorhanden? -->
 				<vdw:variable browse_name="ActGFunctions">
 					<value kind="fetcher" updated="interval" interval="100"></value>
 				</vdw:variable>
@@ -146,12 +146,15 @@
 					</value>
 				</vdw:variable>
 
+<?ignore
+				<!-- currently there is no way to determine the "main" program in the CNC -->
+
 				<!-- active CNC main program [string] -->
 				<vdw:variable browse_name="ActMainProgramFile">
 					<value kind="fetcher" updated="interval" interval="5000"></value>
 				</vdw:variable>
 
-				<!-- active CNC main program offset [uint32] TODO: Programmoffsets fehlen -->
+				<!-- active CNC main program offset [uint32] TODO: no offsets available -->
 				<vdw:variable browse_name="ActMainProgramFileOffset">
 					<value kind="fix">0</value>
 				</vdw:variable>
@@ -162,6 +165,65 @@
 						<pfield>560</pfield>
 					</value>
 				</vdw:variable>
+
+				<!-- active CNC main program name [string] -->
+				<vdw:variable browse_name="ActMainProgramName">
+					<value kind="fetcher" updated="interval" interval="5000">
+						<pfield>560</pfield>
+					</value>
+				</vdw:variable>
+?>
+
+<?ignore
+				<!-- active M functions TODO: no way to determine active M functions -->
+				<vdw:variable browse_name="ActMFunctions">
+				</vdw:variable>
+?>
+
+<?ignore
+				<!-- undocumented in VDW CNC -->
+				<vdw:variable browse_name="ActModalOffsetFunction">
+				</vdw:variable>
+?>
+
+				<!-- active operation mode TODO: is this interpreter state? -->
+				<vdw:variable browse_name="ActOperationMode">
+					<value kind="fetcher" updated="interval" />
+				</vdw:variable>
+
+				<!-- active override value [double] -->
+				<vdw:variable browse_name="ActOverride">
+					<!-- range: 0-300 % -->
+					<value kind="fetcher" updated="interval" range_start="0" range_end="300" unit="%">
+						<pfield>51030</pfield>
+					</value>
+				</vdw:variable>
+
+				<!-- active CNC program block [string[]] -->
+				<vdw:variable browse_name="ActMainProgramFile">
+					<value kind="fetcher" updated="interval" interval="5000"></value>
+				</vdw:variable>
+
+				<!-- active CNC program offset [uint32] TODO: no offsets available -->
+				<vdw:variable browse_name="ActMainProgramFileOffset">
+					<value kind="fix">0</value>
+				</vdw:variable>
+
+				<!-- active CNC main program line [string] -->
+				<vdw:variable browse_name="ActMainProgramLine">
+					<value kind="fetcher" updated="interval" interval="5000">
+						<pfield>560</pfield>
+					</value>
+				</vdw:variable>
+
+				<!-- active CNC main program name [string] -->
+				<vdw:variable browse_name="ActMainProgramName">
+					<value kind="fetcher" updated="interval" interval="5000">
+						<pfield>560</pfield>
+					</value>
+				</vdw:variable>
+?>
+
 
 			</demo:object> <!-- end of channel -->
 

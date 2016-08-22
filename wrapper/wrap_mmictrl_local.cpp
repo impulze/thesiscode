@@ -41,6 +41,7 @@ MAKE_FUN_PTR_AND_VAR(ncrGetInitState, LONG, HANDLE)
 MAKE_FUN_PTR_AND_VAR(ncrCloseControl, VOID, HANDLE)
 MAKE_FUN_PTR_AND_VAR(ncrLoadFirmwareBlocked, LONG, HANDLE, LPCSTR)
 MAKE_FUN_PTR_AND_VAR(ncrSendFileBlocked, LONG, HANDLE, LPCSTR, LPCSTR, LONG)
+MAKE_FUN_PTR_AND_VAR(ncrReceiveFileBlocked, LONG, HANDLE, LPCSTR, LONG)
 MAKE_FUN_PTR_AND_VAR(ncrSendMessage, BOOL, HANDLE, MSG_TR *)
 MAKE_FUN_PTR_AND_VAR(ncrReadParamArray, BOOL, HANDLE, WORD *, double *, WORD)
 bool g_dll_loaded;
@@ -208,6 +209,7 @@ void load_cnc_dlls()
 	LOAD_FUN(ncrCloseControl, module)
 	LOAD_FUN(ncrLoadFirmwareBlocked, module)
 	LOAD_FUN(ncrSendFileBlocked, module)
+	LOAD_FUN(ncrReceiveFileBlocked, module)
 	LOAD_FUN(ncrSendMessage, module)
 	LOAD_FUN(ncrReadParamArray, module)
 }
@@ -522,6 +524,18 @@ void mmictrl_local::send_file_blocked(std::string const &name, std::string const
 
 	const LONG cnv_type = to_block_type_conversion(type);
 	const LONG result = ncrSendFileBlocked_p(impl_->handle, name.c_str(), header.c_str(), cnv_type);
+
+	throw_transfer_exception(conversion_to_transfer_status_type(result));
+}
+
+void mmictrl_local::receive_file_blocked(std::string const &name, transfer_block_type type)
+{
+	if (!impl_) {
+		throw std::runtime_error("Control not opened.");
+	}
+
+	const LONG cnv_type = to_block_type_conversion(type);
+	const LONG result = ncrReceiveFileBlocked_p(impl_->handle, header.c_str(), cnv_type);
 
 	throw_transfer_exception(conversion_to_transfer_status_type(result));
 }

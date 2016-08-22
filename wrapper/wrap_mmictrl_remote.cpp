@@ -329,12 +329,48 @@ void mmictrl_remote::send_file_blocked(std::string const &name, std::string cons
 		throw std::runtime_error("[MMICTRL] Control not opened.");
 	}
 
-	auto message = message::from_type(message_type::CTRL_LOAD_FIRMWARE_BLOCKED);
+	auto message = message::from_type(message_type::CTRL_SEND_FILE_BLOCKED);
 	message->append(name);
 	message->append(header);
 	message->append(static_cast<std::uint8_t>(type));
 
 	auto response = impl_->send_message_and_wait(message, 20000, message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE);
+
+	if (response->contents[0] == 0) {
+		return;
+	}
+
+	std::uint16_t position = 0;
+
+	wrap::transfer_status_type status = static_cast<wrap::transfer_status_type>(response->extract_bit8(position++));
+	const std::string error_string = response->extract_string(0);
+	const std::uint16_t string_size = static_cast<std::uint16_t>(error_string.size());
+	char new_error_string[1024];
+
+	if (status == wrap::transfer_status_type::FAIL) {
+		const std::uint32_t win32_error = response->extract_bit32(2 + string_size);
+		snprintf(new_error_string, sizeof new_error_string,
+			"[MMICTRL] Remote DLL Win32 or Subsystem error.\n"
+			"[MMICTRL] %s\n", error_string.c_str());
+		throw transfer_exception_error(new_error_string, status, win32_error);
+	} else {
+		snprintf(new_error_string, sizeof new_error_string,
+			"[MMICTRL] %s\n", error_string.c_str());
+		throw transfer_exception(new_error_string, status);
+	}
+}
+
+void mmictrl_remote::receive_file_blocked(std::string const &name, transfer_block_type type)
+{
+	if (!impl_) {
+		throw std::runtime_error("[MMICTRL] Control not opened.");
+	}
+
+	auto message = message::from_type(message_type::CTRL_RECEIVE_FILE_BLOCKED);
+	message->append(name);
+	message->append(static_cast<std::uint8_t>(type));
+
+	auto response = impl_->send_message_and_wait(message, 20000, message_type::CTRL_RECEIVE_FILE_BLOCKED_RESPONSE);
 
 	if (response->contents[0] == 0) {
 		return;

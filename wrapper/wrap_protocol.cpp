@@ -254,6 +254,8 @@ char const *message_type_to_string(message_type type)
 		case message_type::CTRL_LOAD_FIRMWARE_BLOCKED_RESPONSE: return "CTRL_LOAD_FIRMWRAE_BLOCKED_RESPONSE";
 		case message_type::CTRL_SEND_FILE_BLOCKED: return "CTRL_SEND_FILE_BLOCKED";
 		case message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE: return "CTRL_SEND_FILE_BLOCKED_RESPONSE";
+		case message_type::CTRL_RECEIVE_FILE_BLOCKED: return "CTRL_RECEIVE_FILE_BLOCKED";
+		case message_type::CTRL_RECEIVE_FILE_BLOCKED_RESPONSE: return "CTRL_RECEIVE_FILE_BLOCKED_RESPONSE";
 		case message_type::CTRL_READ_PARAM_ARRAY: return "CTRL_READ_PARAM_ARRAY";
 		case message_type::CTRL_READ_PARAM_ARRAY_RESPONSE: return "CTRL_READ_PARAM_ARRAY_RESPONSE";
 		case message_type::CTRL_SEND_MESSAGE: return "CTRL_SEND_MESSAGE";
@@ -294,6 +296,10 @@ bool valid_message_type(std::uint16_t check_type)
 		case wrap::message_type::CTRL_SEND_FILE_BLOCKED:
 			return true;
 		case wrap::message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE:
+			return true;
+		case wrap::message_type::CTRL_RECEIVE_FILE_BLOCKED:
+			return true;
+		case wrap::message_type::CTRL_RECEIVE_FILE_BLOCKED_RESPONSE:
 			return true;
 		case wrap::message_type::CTRL_READ_PARAM_ARRAY:
 			return true;

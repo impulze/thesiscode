@@ -197,7 +197,7 @@ struct mmictrl
 	// Synchrone Funktion, um Dateien, z.B. Maschinenkonstanten oder DIN-Programme von der
 	// Steuerung zu übertragen.
 	// Parameter: Dateiname, Steuerblock 1 für Blockübertragungen
-	//virtual void receive_file_blocked(std::string const &name, transfer_block_type type) = 0;
+	virtual void receive_file_blocked(std::string const &name, transfer_block_type type) = 0;
 
 	// Synchrone Funktion, um Nachrichten an die Steuerung zu senden
 	// Parameter: Nachrichten-Struktur
