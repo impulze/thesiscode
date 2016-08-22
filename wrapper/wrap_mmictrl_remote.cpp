@@ -14,6 +14,7 @@ namespace
 
 void check_server_error(std::shared_ptr<wrap::message> const &response);
 void check_correct_response_type(std::shared_ptr<wrap::message> const &response, wrap::message_type type);
+wrap::callback_type_type conversion_to_callback_type(std::uint8_t type);
 
 struct mmictrl_client
 	: wrap::client
@@ -26,6 +27,8 @@ struct mmictrl_client
 	void on_message(std::shared_ptr<wrap::message> const &message) override;
 
 	std::shared_ptr<wrap::message> last_message_received;
+	bool waiting_for_reply;
+	wrap::mmictrl_remote *remote;
 };
 
 }
@@ -73,6 +76,32 @@ void check_correct_response_type(std::shared_ptr<wrap::message> const &response,
 	}
 }
 
+wrap::callback_type_type conversion_to_callback_type(std::uint8_t type)
+{
+#define CONVHELP(x) case wrap::callback_type_type::##x: return wrap::callback_type_type::##x;
+	switch (type) {
+		CONVHELP(MMI_DOWNLOAD_STATE)
+		CONVHELP(MMI_DOWNLOAD_PART)
+		CONVHELP(MMI_DOWNLOAD_COMPLETE)
+		CONVHELP(MMI_DOWNLOAD_ERROR)
+		CONVHELP(MMI_TRANSFER_STATE)
+		CONVHELP(MMI_TRANSFER_OK)
+		CONVHELP(MMI_TRANSFER_ERROR)
+		CONVHELP(MMI_TRANSFER_BREAK)
+		CONVHELP(MMI_NCMSG_SENT)
+		CONVHELP(MMI_NCMSG_NOT_SENT)
+		CONVHELP(MMI_NCMSG_RECEIVED)
+		CONVHELP(MMI_ERROR_MSG)
+		CONVHELP(MMI_CYCLIC_CALL)
+		CONVHELP(MMI_DEFAPP_STATE)
+		CONVHELP(MMI_CAN_TRANSFER_STATE)
+		CONVHELP(MMI_CAN_TRANSFER_COMPLETE)
+		CONVHELP(MMI_UNIMPLEMENTED)
+	}
+
+	throw std::runtime_error("Conversion not possible.");
+}
+
 mmictrl_client::mmictrl_client(std::string const &address, std::uint16_t port)
 	: wrap::client(address, port)
 {
@@ -85,7 +114,25 @@ void mmictrl_client::send_message(std::shared_ptr<wrap::message> const &message)
 
 void mmictrl_client::on_message(std::shared_ptr<wrap::message> const &message)
 {
-	last_message_received = message;
+	if (waiting_for_reply) {
+		last_message_received = message;
+		return;
+	} else {
+		switch (message->type) {
+			case wrap::message_type::CTRL_MESSAGE: {
+				wrap::callback_function_type func = remote->get_message_callback();
+
+				if (func) {
+					func(message->contents.data());
+				}
+
+				break;
+			}
+
+			default:
+				throw std::runtime_error("Received unexpected message.");
+		}
+	}
 }
 
 }
@@ -97,7 +144,9 @@ std::shared_ptr<message>
 mmictrl_remote::impl::send_message_and_wait(std::shared_ptr<message> const &message, int timeout)
 {
 	client->send_message(message);
+	client->waiting_for_reply = true;
 	client->last_message_received.reset();
+	client->waiting_for_reply = false;
 	client->run_one(timeout);
 
 	if (client->last_message_received) {
@@ -131,39 +180,23 @@ mmictrl_remote::mmictrl_remote()
 mmictrl_remote::~mmictrl_remote()
 {
 	if (!impl_) {
-		// not connected
-		return;
+		close();
 	}
-
-	std::shared_ptr<message> response;
-
-	try {
-		auto message = message::from_type(message_type::CTRL_CLOSE);
-		response = impl_->send_message_and_wait(message, 2000, message_type::CTRL_CLOSE_RESPONSE);
-	} catch (std::exception const &exception) {
-		std::fprintf(stderr, "[MMICTRL] Closing CNC connection [%s] failed.\n"
-		                     "[MMICTRL] %s\n", impl_->name.c_str(), exception.what());
-		return;
-	}
-
-	if (response->contents[0] == 0) {
-		std::printf("[MMICTRL] CNC connection [%s] closed.\n", impl_->name.c_str());
-		return;
-	}
-
-	const std::string error_string = response->extract_string(1);
-	std::fprintf(stderr, "[MMICTRL] Closing CNC connection [%s] failed.\n"
-	                     "[MMICTRL] Remote error: %s\n", impl_->name.c_str(), error_string.c_str());
 }
 
 void mmictrl_remote::open(std::string const &name, std::string const &address, std::uint16_t port)
 {
+	if (impl_) {
+		throw std::runtime_error("[MMICTRL] Control already opened.");
+	}
+
 	std::shared_ptr<impl> impl(new mmictrl_remote::impl());
 
 	impl->name = name;
 
 	try {
 		impl->client.reset(new mmictrl_client(address, port));
+		impl->client->remote = this;
 	} catch (std::exception const &exception) {
 		auto newexcp = exception_from_sprintf(1024,
 			"[MMICTRL] Opening CNC connection to [%s] failed.\n"
@@ -195,6 +228,34 @@ void mmictrl_remote::open(std::string const &name, std::string const &address, s
 	}
 
 	impl_ = impl;
+}
+
+void mmictrl_remote::close()
+{
+	if (!impl_) {
+		throw std::runtime_error("[MMICTRL] Control not opened.");
+	}
+
+	std::shared_ptr<message> response;
+
+	try {
+		auto message = message::from_type(message_type::CTRL_CLOSE);
+		response = impl_->send_message_and_wait(message, 2000, message_type::CTRL_CLOSE_RESPONSE);
+	} catch (std::exception const &exception) {
+		std::fprintf(stderr, "[MMICTRL] Closing CNC connection [%s] failed.\n"
+		                     "[MMICTRL] %s\n", impl_->name.c_str(), exception.what());
+		return;
+	}
+
+	if (response->contents[0] == 0) {
+		std::printf("[MMICTRL] CNC connection [%s] closed.\n", impl_->name.c_str());
+		return;
+	}
+
+	const std::string error_string = response->extract_string(1);
+	std::fprintf(stderr, "[MMICTRL] Closing CNC connection [%s] failed.\n"
+	                     "[MMICTRL] Remote error: %s\n", impl_->name.c_str(), error_string.c_str());
+	impl_.reset();
 }
 
 bool mmictrl_remote::get_init_state()
@@ -352,11 +413,6 @@ void mmictrl_remote::read_param_array(std::map<std::uint16_t, double> &parameter
 		parameter.second = std::stod(double_string);
 		position += static_cast<std::uint16_t>(2 + double_string.size());
 	}
-}
-
-void mmictrl_remote::on_message(callback_type_type type, void *parameter)
-{
-	std::printf("Received remote MSG: %d\n", static_cast<std::uint8_t>(type));
 }
 
 }

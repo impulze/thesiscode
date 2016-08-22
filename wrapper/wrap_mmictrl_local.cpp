@@ -44,7 +44,7 @@ MAKE_FUN_PTR_AND_VAR(ncrSendFileBlocked, LONG, HANDLE, LPCSTR, LPCSTR, LONG)
 MAKE_FUN_PTR_AND_VAR(ncrSendMessage, BOOL, HANDLE, MSG_TR *)
 MAKE_FUN_PTR_AND_VAR(ncrReadParamArray, BOOL, HANDLE, WORD *, double *, WORD)
 bool g_dll_loaded;
-std::vector<wrap::mmictrl_local *> g_controls;
+std::map<wrap::mmictrl_local *, std::function<void(ULONG, ULONG, wrap::mmictrl_local *)>> g_controls;
 
 wrap::transfer_exception create_transfer_exception(wrap::transfer_status_type type);
 wrap::transfer_exception_error create_transfer_exception_error(wrap::transfer_status_type type);
@@ -110,10 +110,12 @@ void throw_transfer_exception(wrap::transfer_status_type type)
 void WINAPI callback(ULONG type, ULONG parameter, LPVOID context)
 {
 	wrap::mmictrl_local *ctrl;
+	std::function<void(ULONG, ULONG, wrap::mmictrl_local *)> internal_callback;
 
 	for (auto it = g_controls.begin(); it != g_controls.end(); ++it) {
-		if (*it == context) {
-			ctrl = *it;
+		if (it->first == context) {
+			ctrl = it->first;
+			internal_callback = it->second;
 			break;
 		}
 	}
@@ -124,21 +126,11 @@ void WINAPI callback(ULONG type, ULONG parameter, LPVOID context)
 	}
 
 	try {
-		const wrap::callback_type_type cpp_type = conversion_to_callback_type_type(type);
-
-		switch (type) {
-			case VK_MMI_NCMSG_RECEIVED:
-			case VK_MMI_ERROR_MSG: {
-				wrap::transfer_message msg = eckelmann_to_cpp_message(parameter);
-				ctrl->on_message(cpp_type, &msg);
-				break;
-			}
-
-			default:
-				ctrl->on_message(cpp_type, &parameter);
-		}
-	} catch (std::exception const &error) {
-		ctrl->on_message(wrap::callback_type_type::MMI_UNIMPLEMENTED, const_cast<char *>(error.what()));
+		internal_callback(type, parameter, ctrl);
+		return;
+	} catch (std::exception const &exception) {
+		std::fprintf(stderr, "Calling message callback failed: %s\nClosing connection.", exception.what());
+		ctrl->close();
 	}
 }
 
@@ -318,33 +310,135 @@ namespace wrap
 
 struct mmictrl_local::impl
 {
+	void internal_callback(ULONG type, ULONG parameter, mmictrl_local *ctrl);
+
 	HANDLE handle;
 	std::string name;
 	transfer_message last_error;
 };
 
-mmictrl_local::~mmictrl_local()
+void mmictrl_local::impl::internal_callback(ULONG type, ULONG parameter, mmictrl_local *ctrl)
 {
-	if (!impl_) {
-		return;
-	}
+	std::vector<std::uint8_t> data;
+	const wrap::callback_type_type cpp_type = conversion_to_callback_type_type(type);
+	data.resize(5);
+	std::uint32_t size = 5;
+	data[0] = static_cast<std::uint8_t>(cpp_type);
+	auto func = ctrl->get_message_callback();
+	bool called = false;
+	transfer_message msg;
 
-	ncrCloseControl_p(impl_->handle);
+	auto msg_append = [&msg, &data]() {
+		data.push_back(msg.controlblock0);
+		data.push_back(msg.controlblock1);
+		data.push_back(msg.controlblock2);
+		data.push_back(msg.current_block_number);
+		data.push_back(msg.sender);
+		data.push_back(msg.handle);
+		data.insert(data.end(), msg.data.begin(), msg.data.end());
+	};
 
-	for (auto it = g_controls.begin(); it != g_controls.end();) {
-		if (*it == this) {
-			g_controls.erase(it);
-			break;
-		} else {
-			++it;
+	auto bit32_to_bit8 = [](std::uint32_t num, std::uint8_t *dest) {
+		dest[0] = static_cast<std::uint8_t>((num & 0xff000000) >> 24);
+		dest[1] = static_cast<std::uint8_t>((num & 0xff0000) >> 16);
+		dest[2] = static_cast<std::uint8_t>((num & 0xff00) >> 8);
+		dest[3] = static_cast<std::uint8_t>((num & 0xff) >> 0);
+	};
+
+	auto call = [&called, &data, &func, &bit32_to_bit8]() {
+		bit32_to_bit8(data.size(), data.data() + 1);
+		func(data.data());
+		called = true;
+	};
+
+	if (type == VK_MMI_NCMSG_RECEIVED ||type == VK_MMI_ERROR_MSG) {
+		try {
+			msg = eckelmann_to_cpp_message(parameter);
+		} catch (std::exception const &exception) {
+			fprintf(stderr, "Unable to convert NCMSG_RECEIVED/ERROR_MSG: %s\n", exception.what());
+
+			if (func) {
+				const size_t string_length = std::strlen(exception.what());
+				data[0] = static_cast<std::uint8_t>(wrap::callback_type_type::MMI_UNIMPLEMENTED);
+				data.push_back(static_cast<std::uint8_t>(cpp_type));
+				data.insert(data.end(), exception.what(), exception.what() + string_length);
+				call();
+			}
+
+			return;
 		}
 	}
 
-	std::printf("CNC [%s] closed.\n", impl_->name.c_str());
+	switch (cpp_type) {
+		case callback_type_type::MMI_CYCLIC_CALL:
+			if (func) {
+				call();
+			}
+
+			break;
+
+		case callback_type_type::MMI_NCMSG_RECEIVED:
+			printf("data: %d\n", msg.data.size());
+			std::uint32_t guess;
+			std::memcpy(&guess, msg.data.data(), 4);
+			printf("guess: %d\n", guess);
+			if (func) {
+				msg_append();
+				call();
+			}
+
+			break;
+
+		case callback_type_type::MMI_ERROR_MSG: {
+			const std::uint8_t task = msg.data[0];
+			const std::uint8_t cls = msg.data[1];
+			std::int16_t num;
+			std::memcpy(&num, msg.data.data() + 2, 2);
+			const char *format = reinterpret_cast<char *>(msg.data.data() + 4);
+			const char *str_data = reinterpret_cast<char *>(msg.data.data() + 84);
+			char error_msg[1024];
+			snprintf(error_msg, sizeof error_msg, format, str_data);
+			last_error = msg;
+			std::printf("CNC ERROR: [task: %d, class: %d, num: %hd] [%s]\n", task, cls, num, error_msg);
+
+			if (func) {
+				call();
+			}
+
+			break;
+		}
+
+		default: {
+			if (func) {
+				data.resize(data.size() + 4);
+				bit32_to_bit8(parameter, data.data() + data.size() - 4);
+				call();
+			}
+
+			break;
+		}
+	}
+
+	// this will only run on Win32 consolies
+	if (!called) {
+		std::printf("Got a message from CNC [type: %d]\n", type);
+	}
+}
+
+
+mmictrl_local::~mmictrl_local()
+{
+	if (impl_) {
+		close();
+	}
 }
 
 void mmictrl_local::open(std::string const &name)
 {
+	if (impl_) {
+		throw std::runtime_error("Control already opened.");
+	}
+
 	if (!g_dll_loaded) {
 		load_cnc_dlls();
 		g_dll_loaded = true;
@@ -354,17 +448,37 @@ void mmictrl_local::open(std::string const &name)
 	impl->handle = NULL;
 	impl->name = name;
 
-	g_controls.push_back(this);
+	auto callback = [&impl](ULONG type, ULONG parameter, mmictrl_local *ctrl) {
+		impl->internal_callback(type, parameter, ctrl);
+	};
+
+	g_controls[this] = callback;
 
 	impl->handle = ncrOpenControl_p(name.c_str(), ::callback, this);
 
 	if (impl->handle == INVALID_HANDLE_VALUE) {
 		impl->handle = NULL;
+		g_controls.erase(g_controls.find(this));
 		throw create_error();
 	}
 
 	impl_ = impl;
 	std::printf("CNC [%s] opened.\n", impl_->name.c_str());
+}
+
+void mmictrl_local::close()
+{
+	if (!impl_) {
+		throw std::runtime_error("Control not opened.");
+	}
+
+	ncrCloseControl_p(impl_->handle);
+
+	g_controls.at(this);
+	g_controls.erase(g_controls.find(this));
+
+	std::printf("CNC [%s] closed.\n", impl_->name.c_str());
+	impl_.reset();
 }
 
 bool mmictrl_local::get_init_state()
@@ -507,51 +621,6 @@ void mmictrl_local::read_param_array(std::map<std::uint16_t, double> &parameters
 		parameters[*index_it] = *value_it;
 		++index_it;
 		++value_it;
-	}
-}
-
-void mmictrl_local::on_message(callback_type_type type, void *parameter)
-{
-	// this will only run on Win32 consolies
-	std::printf("Got a message from CNC [type: %d]\n", type);
-
-	switch (type) {
-		case wrap::callback_type_type::MMI_CYCLIC_CALL:
-			break;
-
-		case wrap::callback_type_type::MMI_ERROR_MSG: {
-			transfer_message *msg = static_cast<transfer_message *>(parameter);
-			const std::uint8_t task = msg->data[0];
-			const std::uint8_t cls = msg->data[1];
-			std::int16_t num;
-			std::memcpy(&num, msg->data.data() + 2, 2);
-			const char *format = reinterpret_cast<char *>(msg->data.data() + 4);
-			const char *data = reinterpret_cast<char *>(msg->data.data() + 84);
-			char error_msg[1024];
-			snprintf(error_msg, sizeof error_msg, format, data);
-			impl_->last_error = *msg;
-			std::printf("CNC ERROR: [task: %d, class: %d, num: %hd] [%s]\n", task, cls, num, error_msg);
-			break;
-		}
-
-		case wrap::callback_type_type::MMI_NCMSG_RECEIVED: {
-			transfer_message *msg = static_cast<transfer_message *>(parameter);
-			if (msg->controlblock0 == 3 && msg->controlblock1 == 22) { // progname
-				std::uint32_t prognr;
-				std::memcpy(&prognr, msg->data.data(), 4);
-				const std::string name(msg->data.begin() + 4, msg->data.end());
-				std::printf("NCMSG: Program name for [num: %d]=[string: %s]\n", prognr, name.c_str());
-			} else {
-				std::printf("NCMSG: %d %lu\n", msg->controlblock0, msg->controlblock1);
-			}
-			break;
-		}
-
-		case wrap::callback_type_type::MMI_UNIMPLEMENTED: {
-			const char *msg = static_cast<const char *>(parameter);
-			std::fprintf(stderr, "NCR message handling not implemented: %s\n", msg);
-			break;
-		}
 	}
 }
 

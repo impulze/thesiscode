@@ -26,6 +26,16 @@ mmictrl::~mmictrl()
 {
 }
 
+void mmictrl::set_message_callback(callback_function_type const &function)
+{
+	callback_ = function;
+}
+
+callback_function_type const &mmictrl::get_message_callback() const
+{
+	return callback_;
+}
+
 void mmictrl::reset()
 {
 	wrap::transfer_message msg = wrap::transfer_message();

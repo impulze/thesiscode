@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <map>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -141,10 +142,15 @@ struct transfer_message
 	std::vector<std::uint8_t> data;
 };
 
+typedef std::function<void(std::uint8_t *)> callback_function_type;
+
 struct mmictrl
 {
-	// Schließen und Beenden der Steuerung
 	virtual ~mmictrl();
+
+
+	// Schließen und Beenden der Steuerung
+	virtual void close() = 0;
 
 	// Zeiger auf Dual-Port-RAM der Steuerung
 	//virtual void *get_dpr_address() = 0;
@@ -212,10 +218,14 @@ struct mmictrl
 
 	// Callback für Steuerungs-Nachrichten
 	// Parameter: Aufruf-Typ, Zusatzparameter je nach Wert des Aufruf-Typs
-	virtual void on_message(callback_type_type type, void *parameter) = 0;
+	void set_message_callback(callback_function_type const &function);
+	callback_function_type const &get_message_callback() const;
 
 	// Reset CNC
 	void reset();
+
+private:
+	callback_function_type callback_;
 };
 
 struct gateway
