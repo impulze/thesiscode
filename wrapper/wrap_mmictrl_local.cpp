@@ -320,6 +320,7 @@ struct mmictrl_local::impl
 {
 	HANDLE handle;
 	std::string name;
+	transfer_message last_error;
 };
 
 mmictrl_local::~mmictrl_local()
@@ -431,13 +432,45 @@ void mmictrl_local::send_message(transfer_message const &message)
 		em_message.n.val_auc[i] = message.data[i];
 	}
 
+	/* HACK:
+	 * it seems this function returns false on some occasions without setting any error
+	 * in GetLastError() but appearently a message is received in the callback while sending
+	 * so clear last error and hope there's a meaningful error after failure
+	 */
+
+	impl_->last_error = wrap::transfer_message();
 	const BOOL result = ncrSendMessage_p(impl_->handle, &em_message);
 
 	if (result == TRUE) {
 		return;
 	}
+	auto error = create_error();
 
-	throw create_error();
+	if (error.win32_error != 0) {
+		throw error;
+	}
+
+	if (impl_->last_error.controlblock0 != SB0_EXCEPTION_KUC ||
+	    impl_->last_error.controlblock1 != SB1_FEHLERNUMMER_KUC) {
+		throw error;
+	}
+
+	if (impl_->last_error.sender != 0) {
+		throw error;
+	}
+
+	std::uint32_t fake_code = (1 << 29);
+	std::uint8_t task_uc = impl_->last_error.data[0];
+	std::uint16_t nummer_s;
+
+	std::memcpy(&nummer_s, impl_->last_error.data.data() + 2, 2);
+
+	fake_code |= task_uc << 16;
+	fake_code |= nummer_s;
+
+	const std::string error_string = wrap::error_string_from_win32_error(fake_code);
+
+	throw wrap::error(error_string, fake_code);
 }
 
 void mmictrl_local::read_param_array(std::map<std::uint16_t, double> &parameters)
@@ -496,6 +529,7 @@ void mmictrl_local::on_message(callback_type_type type, void *parameter)
 			const char *data = reinterpret_cast<char *>(msg->data.data() + 84);
 			char error_msg[1024];
 			snprintf(error_msg, sizeof error_msg, format, data);
+			impl_->last_error = *msg;
 			std::printf("CNC ERROR: [task: %d, class: %d, num: %hd] [%s]\n", task, cls, num, error_msg);
 			break;
 		}
