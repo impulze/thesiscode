@@ -211,7 +211,7 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 		}
 
 		case message_type::CTRL_SEND_MESSAGE: {
-			response = message::from_type(message_type::CTRL_READ_PARAM_ARRAY_RESPONSE);
+			response = message::from_type(message_type::CTRL_SEND_MESSAGE_RESPONSE);
 			transfer_message msg;
 			{
 				const std::uint16_t size = message->extract_bit16(0);
