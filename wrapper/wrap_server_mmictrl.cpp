@@ -114,6 +114,7 @@ void server_mmictrl::on_client_remove(std::shared_ptr<client> const &client)
 {
 	auto it = impl_->find_local_client(client);
 
+	(*it)->ctrl->set_message_callback([](std::uint8_t *){});
 	impl_->clients.erase(it);
 }
 
@@ -143,6 +144,7 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 		case message_type::CTRL_CLOSE: {
 			response = message::from_type(message_type::CTRL_CLOSE_RESPONSE);
 			auto const func = [this, lclient_it]() {
+				(*lclient_it)->ctrl->set_message_callback([](std::uint8_t *){});
 				impl_->clients.erase(lclient_it);
 			};
 			remove_client(client);
