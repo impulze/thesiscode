@@ -11,3 +11,14 @@
 /adapter/objs/
 /adapter/*.d
 /adapter/lib/
+/Visual Studio 2012 Solution/**/*.vcxproj.user
+/Visual Studio 2012 Solution/**/mmictrl.trc
+/Visual Studio 2012 Solution/**/mmigtway.trc
+/Visual Studio 2012 Solution/**/Debug/
+/Visual Studio 2012 Solution/**/Release/
+/Visual Studio 2012 Solution/*.sdf
+/Visual Studio 2012 Solution/*.opensdf
+/Visual Studio 2012 Solution/*.suo
+/Visual Studio 2012 Solution/ipch/
+/Visual Studio 2012 Solution/UA Server/tmp/
+

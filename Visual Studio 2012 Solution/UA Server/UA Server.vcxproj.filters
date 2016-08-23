@@ -1,0 +1,302 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\utilities">
+      <UniqueIdentifier>{8c526672-2949-4fcb-a47c-674bc3005386}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\utilities">
+      <UniqueIdentifier>{e68ebbb2-d930-49ca-bfa5-c48fd17d0b2e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\gen_models">
+      <UniqueIdentifier>{372ab097-d77b-420a-94e8-a04d5ffaffab}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\gen_models">
+      <UniqueIdentifier>{0cd19421-3172-41c3-a2db-2fc168169740}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Config Files">
+      <UniqueIdentifier>{28aba578-9c41-4c43-966e-6ce65d3c21b7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\uaserver\utilities\shutdown.cpp">
+      <Filter>Source Files\utilities</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\uaserver\utilities\opcserver.cpp">
+      <Filter>Source Files\utilities</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\demo_instancefactory_demo.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\demo_nodemanagerdemo.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\demo_nodemanagerdemobase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\eckelmanncnc_instancefactory_ecnc.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\eckelmanncnc_nodemanagerecnc.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\eckelmanncnc_nodemanagerecncbase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncalarmtype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncalarmtypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncaxislisttype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncaxislisttypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncaxistype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncaxistypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncchannellisttype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncchannellisttypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncchanneltype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncchanneltypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cnccomponenttype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cnccomponenttypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncdrivetype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncdrivetypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncinterfacetype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncinterfacetypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncmessagetype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncmessagetypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncpositiontype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncpositionvariabletype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncspindlelisttype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncspindlelisttypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncspindletype.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncspindletypebase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_datatypes.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_instancefactory_cnc.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_nodemanagercnc.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_nodemanagercncbase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\thesiscnc_instancefactory_tcnc.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\thesiscnc_nodemanagertcnc.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\models\gen_models\thesiscnc_nodemanagertcncbase.cpp">
+      <Filter>Source Files\gen_models</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\uaserver\servermain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Xml Include="..\..\uaserver\AdapterConfig.xml">
+      <Filter>Config Files</Filter>
+    </Xml>
+    <Xml Include="..\..\uaserver\ServerConfig.xml">
+      <Filter>Config Files</Filter>
+    </Xml>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\uaserver\utilities\opcserver.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\uaserver\utilities\shutdown.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\demo_datatypes.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\demo_identifiers.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\demo_instancefactory_demo.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\demo_nodemanagerdemo.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\demo_nodemanagerdemobase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_datatypes.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_identifiers.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_instancefactory_ecnc.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_nodemanagerecnc.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_nodemanagerecncbase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncalarmtype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncalarmtypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncaxislisttype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncaxislisttypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncaxistype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncaxistypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncchannellisttype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncchannellisttypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncchanneltype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncchanneltypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cnccomponenttype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cnccomponenttypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncdrivetype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncdrivetypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncinterfacetype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncinterfacetypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncmessagetype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncmessagetypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncpositiontype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncpositionvariabletype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncspindlelisttype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncspindlelisttypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncspindletype.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncspindletypebase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_datatypes.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_identifiers.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_instancefactory_cnc.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_nodemanagercnc.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_nodemanagercncbase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_datatypes.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_identifiers.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_instancefactory_tcnc.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_nodemanagertcnc.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_nodemanagertcncbase.h">
+      <Filter>Header Files\gen_models</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

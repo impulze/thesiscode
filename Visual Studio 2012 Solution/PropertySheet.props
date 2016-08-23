@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <UASDKDIR>C:\Program Files (x86)\UnifiedAutomation\UaSdkCppBundleEval\</UASDKDIR>
+    <Eckelmann_DIR>$(SolutionDir)\..\eckelmann</Eckelmann_DIR>
+    <Adapter_DIR>$(SolutionDir)\..\adapter</Adapter_DIR>
+    <Models_DIR>$(SolutionDir)\..\models</Models_DIR>
+    <UASDK_DEBUG_3RD_LIBDIR>$(UASDKDIR)\third-party\win32\vs2012sp4\libxml2\out32dll.dbg\;$(UASDKDIR)\third-party\win32\vs2012sp4\openssl\out32dll.dbg\;</UASDK_DEBUG_3RD_LIBDIR>
+    <UASDK_DEBUG_3RD_LIBS>libxml2d.lib;libeay32d.lib;ssleay32d.lib;</UASDK_DEBUG_3RD_LIBS>
+    <UASDK_DEBUG_LIBDIR>$(UASDKDIR)\lib;$(UASDK_DEBUG_3RD_LIBDIR);</UASDK_DEBUG_LIBDIR>
+    <UASDK_DEBUG_LIBS>coremoduled.lib;uabased.lib;uamodelsd.lib;uamoduled.lib;uapkid.lib;uastackd.lib;xmlparserd.lib;$(UASDK_DEBUG_3RD_LIBS);crypt32.lib;ws2_32.lib;</UASDK_DEBUG_LIBS>
+    <UASDK_LIBS>coremodule;uabase;uamodels;uamodule;uapki;uastack;xmlparser;$(UASDK_3RD_LIBS);crypt32.lib;ws2_32.lib;</UASDK_LIBS>
+    <UASDK_RPATH>$(UASDKDIR)\bin</UASDK_RPATH>
+    <Wrapper_DIR>$(SolutionDir)\..\wrapper</Wrapper_DIR>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="UASDKDIR">
+      <Value>$(UASDKDIR)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="Eckelmann_DIR">
+      <Value>$(Eckelmann_DIR)</Value>
+    </BuildMacro>
+    <BuildMacro Include="Adapter_DIR">
+      <Value>$(Adapter_DIR)</Value>
+    </BuildMacro>
+    <BuildMacro Include="Models_DIR">
+      <Value>$(Models_DIR)</Value>
+    </BuildMacro>
+    <BuildMacro Include="UASDK_DEBUG_3RD_LIBDIR">
+      <Value>$(UASDK_DEBUG_3RD_LIBDIR)</Value>
+    </BuildMacro>
+    <BuildMacro Include="UASDK_DEBUG_3RD_LIBS">
+      <Value>$(UASDK_DEBUG_3RD_LIBS)</Value>
+    </BuildMacro>
+    <BuildMacro Include="UASDK_DEBUG_LIBDIR">
+      <Value>$(UASDK_DEBUG_LIBDIR)</Value>
+    </BuildMacro>
+    <BuildMacro Include="UASDK_DEBUG_LIBS">
+      <Value>$(UASDK_DEBUG_LIBS)</Value>
+    </BuildMacro>
+    <BuildMacro Include="UASDK_LIBS">
+      <Value>$(UASDK_LIBS)</Value>
+    </BuildMacro>
+    <BuildMacro Include="UASDK_RPATH">
+      <Value>$(UASDK_RPATH)</Value>
+    </BuildMacro>
+    <BuildMacro Include="Wrapper_DIR">
+      <Value>$(Wrapper_DIR)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

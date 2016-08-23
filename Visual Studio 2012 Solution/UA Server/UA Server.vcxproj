@@ -1,0 +1,224 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{0B0DD9D2-75B1-4B61-8661-BC813A3E3ED8}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>UAServer</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120_CTP_Nov2012</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120_CTP_Nov2012</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\PropertySheet.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\PropertySheet.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(VCInstallDir)include;$(VCInstallDir)atlmfc\include;$(WindowsSDK_IncludePath);$(UASDKDIR)/include/uabase;$(UASDKDIR)/include/uastack;$(UASDKDIR)/include/uamodels;$(UASDKDIR)/include/xmlparser;$(UASDKDIR)/include/uapki;$(UASDKDIR)/include/uaserver;$(Adapter_DIR)/include;./../../uaserver/utilities;$(Models_DIR);$(SolutionDir)\$(ProjectName)\tmp;$(Wrapper_DIR)\include</IncludePath>
+    <LibraryPath>$(VCInstallDir)lib;$(VCInstallDir)atlmfc\lib;$(WindowsSDK_LibraryPath_x86);$(UASDK_DEBUG_LIBDIR)</LibraryPath>
+    <ReferencePath>$(VCInstallDir)atlmfc\lib;$(VCInstallDir)lib;</ReferencePath>
+    <ExecutablePath>$(VCInstallPath_CTP_NOV2012_Bin);$(ExecutablePath);</ExecutablePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(VCInstallDir)include;$(VCInstallDir)atlmfc\include;$(WindowsSDK_IncludePath);$(UASDKDIR)/include/uabase;$(UASDKDIR)/include/uastack;$(UASDKDIR)/include/uamodels;$(UASDKDIR)/include/xmlparser;$(UASDKDIR)/include/uapki;$(UASDKDIR)/include/uaserver;$(Adapter_DIR)/include;./../../uaserver/utilities;$(Models_DIR);$(SolutionDir)\$(ProjectName)\tmp;$(Wrapper_DIR)\include</IncludePath>
+    <LibraryPath>$(VCInstallDir)lib;$(VCInstallDir)atlmfc\lib;$(WindowsSDK_LibraryPath_x86);$(UASDK_LIBDIR)</LibraryPath>
+    <ReferencePath>$(VCInstallDir)atlmfc\lib;$(VCInstallDir)lib;</ReferencePath>
+    <ExecutablePath>$(VCInstallPath_CTP_NOV2012_Bin);$(ExecutablePath);</ExecutablePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/FI tmp.h %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies);$(UASDK_DEBUG_LIBS);$(ADAPTER_DEBUG_LIBS);</AdditionalDependencies>
+    </Link>
+    <PreLinkEvent>
+      <Command>cd</Command>
+    </PreLinkEvent>
+    <PostBuildEvent>
+      <Command>for %%I in (uastackd.dll libeay32d.dll ssleay32d.dll libxml2d.dll) do xcopy /Y "$(UASDK_RPATH)\%%I" "$(SolutionDir)\$(Configuration)"</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>mkdir tmp
+set __TEMP__=$(SolutionDir)\..\uaserver
+set __TEMP__=%__TEMP__:\=\\%
+echo #define ADAPTER_ALTERNATE_CONFIG_PATH "%__TEMP__%"  &gt; tmp/tmp.h
+set __TEMP__=$(SolutionDir)\..\uaserver
+set __TEMP__=%__TEMP__:\=\\%
+echo #define SERVER_ALTERNATE_CONFIG_PATH "%__TEMP__%"  &gt;&gt; tmp/tmp.h</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;ALTERNATE_SERVER_CONFIG_PATH=$(NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/FI tmp.h %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies);$(UASDK_LIBS);$(ADAPTER_LIBS);</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>for %%I in (uastack.dll libeay32.dll ssleay32.dll libxml2.dll) do xcopy /Y "$(UASDK_RPATH)\%%I" "$(SolutionDir)\$(Configuration)"</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>mkdir tmp
+set __TEMP__=$(Adapter_Dir)
+set __TEMP__=%__TEMP__:\=\\%
+echo #define ADAPTER_ALTERNATE_CONFIG_PATH "%__TEMP__%"  &gt; tmp/tmp.h
+set __TEMP__=$(SolutionDir)\..\uaserver
+set __TEMP__=%__TEMP__:\=\\%
+echo #define SERVER_ALTERNATE_CONFIG_PATH "%__TEMP__%"  &gt;&gt; tmp/tmp.h</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\models\gen_models\demo_instancefactory_demo.cpp" />
+    <ClCompile Include="..\..\models\gen_models\demo_nodemanagerdemo.cpp" />
+    <ClCompile Include="..\..\models\gen_models\demo_nodemanagerdemobase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\eckelmanncnc_instancefactory_ecnc.cpp" />
+    <ClCompile Include="..\..\models\gen_models\eckelmanncnc_nodemanagerecnc.cpp" />
+    <ClCompile Include="..\..\models\gen_models\eckelmanncnc_nodemanagerecncbase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncalarmtype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncalarmtypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncaxislisttype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncaxislisttypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncaxistype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncaxistypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncchannellisttype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncchannellisttypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncchanneltype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncchanneltypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cnccomponenttype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cnccomponenttypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncdrivetype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncdrivetypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncinterfacetype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncinterfacetypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncmessagetype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncmessagetypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncpositiontype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncpositionvariabletype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncspindlelisttype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncspindlelisttypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncspindletype.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_cncspindletypebase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_datatypes.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_instancefactory_cnc.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_nodemanagercnc.cpp" />
+    <ClCompile Include="..\..\models\gen_models\opcuacnc_nodemanagercncbase.cpp" />
+    <ClCompile Include="..\..\models\gen_models\thesiscnc_instancefactory_tcnc.cpp" />
+    <ClCompile Include="..\..\models\gen_models\thesiscnc_nodemanagertcnc.cpp" />
+    <ClCompile Include="..\..\models\gen_models\thesiscnc_nodemanagertcncbase.cpp" />
+    <ClCompile Include="..\..\uaserver\servermain.cpp" />
+    <ClCompile Include="..\..\uaserver\utilities\opcserver.cpp" />
+    <ClCompile Include="..\..\uaserver\utilities\shutdown.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Xml Include="..\..\uaserver\AdapterConfig.xml" />
+    <Xml Include="..\..\uaserver\ServerConfig.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\models\gen_models\demo_datatypes.h" />
+    <ClInclude Include="..\..\models\gen_models\demo_identifiers.h" />
+    <ClInclude Include="..\..\models\gen_models\demo_instancefactory_demo.h" />
+    <ClInclude Include="..\..\models\gen_models\demo_nodemanagerdemo.h" />
+    <ClInclude Include="..\..\models\gen_models\demo_nodemanagerdemobase.h" />
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_datatypes.h" />
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_identifiers.h" />
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_instancefactory_ecnc.h" />
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_nodemanagerecnc.h" />
+    <ClInclude Include="..\..\models\gen_models\eckelmanncnc_nodemanagerecncbase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncalarmtype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncalarmtypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncaxislisttype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncaxislisttypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncaxistype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncaxistypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncchannellisttype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncchannellisttypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncchanneltype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncchanneltypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cnccomponenttype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cnccomponenttypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncdrivetype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncdrivetypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncinterfacetype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncinterfacetypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncmessagetype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncmessagetypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncpositiontype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncpositionvariabletype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncspindlelisttype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncspindlelisttypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncspindletype.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_cncspindletypebase.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_datatypes.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_identifiers.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_instancefactory_cnc.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_nodemanagercnc.h" />
+    <ClInclude Include="..\..\models\gen_models\opcuacnc_nodemanagercncbase.h" />
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_datatypes.h" />
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_identifiers.h" />
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_instancefactory_tcnc.h" />
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_nodemanagertcnc.h" />
+    <ClInclude Include="..\..\models\gen_models\thesiscnc_nodemanagertcncbase.h" />
+    <ClInclude Include="..\..\uaserver\utilities\opcserver.h" />
+    <ClInclude Include="..\..\uaserver\utilities\shutdown.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Adapter\Adapter.vcxproj">
+      <Project>{333b46a6-3f7c-42db-a77a-2e8930abfa99}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Wrapper\Wrapper.vcxproj">
+      <Project>{325ffae2-14a1-4fd8-94f7-e49dee3b194f}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
