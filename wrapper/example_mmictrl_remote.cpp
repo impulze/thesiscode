@@ -76,15 +76,19 @@ int main(int argc, char **argv)
 
 		std::map<std::uint16_t, double> parameters;
 		parameters[0] = 0;
-		while (g_run_mmictrl_remote) {
-printf("read param\n");
-			g_mmictrl_remote->read_param_array(parameters);
 
-			for (auto const &parameter: parameters) {
-				std::printf("CNC P-Field [%d=%g]\n", parameter.first, parameter.second);
+		while (g_run_mmictrl_remote) {
+			if (parameters.size()) {
+				g_mmictrl_remote->read_param_array(parameters);
+
+				for (auto const &parameter: parameters) {
+					std::printf("CNC P-Field [%d=%g]\n", parameter.first, parameter.second);
+				}
 			}
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+			g_mmictrl_remote->receive_file_blocked("0", wrap::transfer_block_type::NC_PROGRAMM);
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 		}
 
 

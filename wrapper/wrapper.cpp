@@ -21,8 +21,6 @@
 #include <bitset>
 #include <iostream>
 
-#define CHANNEL1_OFFSET 51000
-
 namespace wrapper
 {
 
@@ -40,7 +38,7 @@ struct wrapper::impl
 	::adapter::xml_node_map_type nodes;
 	std::unique_ptr<wrap::mmictrl> ctrl;
 	std::map<::adapter::xml_node_type const *, internal_function_callback_type> watched_nodes;
-	std::map<std::uint16_t, ::adapter::xml_node_type const *> watched_pfields;
+	std::map<std::uint16_t, std::vector<::adapter::xml_node_type const *>> watched_pfields;
 	std::mutex mutex;
 	std::condition_variable condition;
 	bool is_local;
@@ -205,93 +203,174 @@ void wrapper::watch_node(::adapter::xml_node_type const &node, ::adapter::xml_no
 	}
 
 	if (pfield_set) {
-		auto pfield_callback = [callback](ntype node, fitype fetch_info) {
-			// append size of double string
-			const std::uint32_t size = fetch_info.bytes.size();
-			std::uint8_t const *size_ptr = reinterpret_cast<std::uint8_t const *>(&size);
-			fetch_info.bytes.insert(fetch_info.bytes.begin(), size_ptr, size_ptr + 4);
-			callback(node, fetch_info);
-		};
+		if (node.browse_path.last().str() == "cnc:ActProgramStatus") {
+			auto status_callback = [callback](ntype node, fitype fetch_info) {
+				const std::string double_string(fetch_info.bytes.begin(), fetch_info.bytes.end());
+				const double value = std::stod(double_string);
+				const std::uint8_t status = static_cast<std::uint8_t>(value);
 
-		impl_->watched_nodes[&node] = pfield_callback;
-		impl_->watched_pfields[static_cast<std::uint16_t>(std::stoi(pfield))] = &node;
-	} else if (node.browse_path.last().str() == "cnc:ActGFunctions") {
-		auto gfunc_callback = [callback](ntype node, fitype fetch_info) {
-			const std::string double_string(fetch_info.bytes.begin(), fetch_info.bytes.end());
-			const std::bitset<10> bits(static_cast<unsigned long long>(std::stod(double_string)));
-			std::vector<std::uint32_t> array;
+				fetch_info.bytes.resize(1);
+				if (status == 0) { // idle
+					fetch_info.bytes[0] = 0; // stopped
+				} else if (status == 1) { // run
+					fetch_info.bytes[0] = 1; // run
+				} else if (status == 2) { // break-abort
+					fetch_info.bytes[0] = 4; // canceled
+				} else if (status == 3) { // abort-wait-quit
+					fetch_info.bytes[0] = 2; // wait
+				} else if (status == 4) { // abort
+					fetch_info.bytes[0] = 4; // canceled
+				} else if (status == 5) { // break-interrupt (unterbrechen)
+					fetch_info.bytes[0] = 3; // interrupt
+				} else if (status == 6) { // interrupt (unterbrechen)
+					fetch_info.bytes[0] = 3; // interrupt
+				} else if (status == 7) { // break-next
+					fetch_info.bytes[0] = 0; // run
+				} else if (status == 8) { // next
+					fetch_info.bytes[0] = 0; // run
+				} else if (status == 9) { // break-interrupt
+					fetch_info.bytes[0] = 3; // interrupt
+				} else if (status == 10) { // interrupt
+					fetch_info.bytes[0] = 3; // interrupt
+				} else if (status == 11) { // break-error
+					fetch_info.bytes[0] = 3; // interrupt
+				} else if (status == 12) { // error
+					fetch_info.bytes[0] = 3; // interrupt
+				} else if (status == 13) { // ausgleich
+					fetch_info.bytes[0] = 1; // run
+				}
 
-			if (bits[0]) {
-				array.push_back(31);
-			} else {
-				array.push_back(30);
-			}
+				callback(node, fetch_info);
+			};
+			impl_->watched_nodes[&node] = status_callback;
+			impl_->watched_pfields[static_cast<std::uint16_t>(std::stoi(pfield))].push_back(&node);
+		} else if (node.browse_path.last().str() == "cnc:ActStatus") {
+			auto status_callback = [callback](ntype node, fitype fetch_info) {
+				const std::string double_string(fetch_info.bytes.begin(), fetch_info.bytes.end());
+				const double value = std::stod(double_string);
+				const std::uint8_t status = static_cast<std::uint8_t>(value);
 
-			if (bits[2]) {
-				array.push_back(133);
-			} else {
-				array.push_back(132);
-			}
+				fetch_info.bytes.resize(1);
+				// TODO: reset is not used?
+				if (status == 0) { // idle
+					fetch_info.bytes[0] = 0; // active
+				} else if (status == 1) { // run
+					fetch_info.bytes[0] = 0; // active
+				} else if (status == 2) { // break-abort
+					fetch_info.bytes[0] = 1; // interrupted
+				} else if (status == 3) { // abort-wait-quit
+					fetch_info.bytes[0] = 0; // active
+				} else if (status == 4) { // abort
+					fetch_info.bytes[0] = 1; // interrupted
+				} else if (status == 5) { // break-interrupt (unterbrechen)
+					fetch_info.bytes[0] = 1; // interrupted
+				} else if (status == 6) { // interrupt (unterbrechen)
+					fetch_info.bytes[0] = 1; // interrupted
+				} else if (status == 7) { // break-next
+					fetch_info.bytes[0] = 0; // active
+				} else if (status == 8) { // next
+					fetch_info.bytes[0] = 0; // active
+				} else if (status == 9) { // break-interrupt
+					fetch_info.bytes[0] = 1; // interrupted
+				} else if (status == 10) { // interrupt
+					fetch_info.bytes[0] = 1; // interrupted
+				} else if (status == 11) { // break-error
+					fetch_info.bytes[0] = 1; // interrupted
+				} else if (status == 12) { // error
+					fetch_info.bytes[0] = 1; // interrupted
+				} else if (status == 13) { // ausgleich
+					fetch_info.bytes[0] = 0; // run
+				}
 
-			if (bits[4]) {
-				array.push_back(114);
-			}
+				callback(node, fetch_info);
+			};
+			impl_->watched_nodes[&node] = status_callback;
+			impl_->watched_pfields[static_cast<std::uint16_t>(std::stoi(pfield))].push_back(&node);
+		} else if (node.browse_path.last().str() == "cnc:ActGFunctions") {
+			auto gfunc_callback = [callback](ntype node, fitype fetch_info) {
+				const std::string double_string(fetch_info.bytes.begin(), fetch_info.bytes.end());
+				const std::bitset<10> bits(static_cast<unsigned long long>(std::stod(double_string)));
+				std::vector<std::uint32_t> array;
 
-			if (bits[5]) {
-				array.push_back(231);
-			}
+				if (bits[0]) {
+					array.push_back(31);
+				} else {
+					array.push_back(30);
+				}
 
-			if (bits[6]) {
-				array.push_back(217);
-			}
+				if (bits[2]) {
+					array.push_back(133);
+				} else {
+					array.push_back(132);
+				}
 
-			if (bits[8]) {
-				array.push_back(214);
-			}
+				if (bits[4]) {
+					array.push_back(114);
+				}
 
-			if (bits[9]) {
-				array.push_back(233);
-			}
+				if (bits[5]) {
+					array.push_back(231);
+				}
 
-			std::uint32_t array_size = array.size();
+				if (bits[6]) {
+					array.push_back(217);
+				}
 
-			fetch_info.bytes.resize(4 + array.size() * 4);
+				if (bits[8]) {
+					array.push_back(214);
+				}
 
-			std::memcpy(fetch_info.bytes.data(), &array_size, 4);
+				if (bits[9]) {
+					array.push_back(233);
+				}
 
-			size_t current = 4;
+				std::uint32_t array_size = array.size();
 
-			for (auto const &element: array) {
-				std::memcpy(fetch_info.bytes.data() + current, &element, 4);
-				current += 4;
-			}
+				fetch_info.bytes.resize(4 + array.size() * 4);
+				std::memcpy(fetch_info.bytes.data(), &array_size, 4);
 
-			callback(node, fetch_info);
-		};
+				size_t current = 4;
 
-		impl_->watched_nodes[&node] = gfunc_callback;
-		impl_->watched_pfields[CHANNEL1_OFFSET + 15] = &node;
-	} else if (node.browse_path.last().str() == "cnc:ActOperationMode") {
-		auto oper_callback = [callback](ntype node, fitype fetch_info) {
-			const std::string double_string(fetch_info.bytes.begin(), fetch_info.bytes.end());
-			const double value = std::stod(double_string);
-			const std::uint8_t operation_mode = static_cast<std::uint8_t>(value);
+				for (auto const &element: array) {
+					std::memcpy(fetch_info.bytes.data() + current, &element, 4);
+					current += 4;
+				}
+	
+				callback(node, fetch_info);
+			};
+			impl_->watched_nodes[&node] = gfunc_callback;
+			impl_->watched_pfields[static_cast<std::uint16_t>(std::stoi(pfield))].push_back(&node);
+		} else if (node.browse_path.last().str() == "cnc:ActOperationMode") {
+			auto oper_callback = [callback](ntype node, fitype fetch_info) {
+				const std::string double_string(fetch_info.bytes.begin(), fetch_info.bytes.end());
+				const double value = std::stod(double_string);
+				const std::uint8_t operation_mode = static_cast<std::uint8_t>(value);
 
-			fetch_info.bytes.resize(1);
-			if (operation_mode == 0) {
-				// kein programm = manual
-				fetch_info.bytes[0] = 0;
-			} else {
-				// alles andere = automatisch (kein MDA)
-				fetch_info.bytes[0] = 2;
-			}
-
-			callback(node, fetch_info);
-		};
-		impl_->watched_nodes[&node] = oper_callback;
-		impl_->watched_pfields[CHANNEL1_OFFSET + 14] = &node;
-	} else if (node.browse_path.last().str() == "cnc:ActGFunctions") {
-		if (browse_name == "cnc:ActMainProgramFile") return;
+				fetch_info.bytes.resize(1);
+				if (operation_mode == 0) {
+					// kein programm = manual
+					fetch_info.bytes[0] = 0;
+				} else {
+					// alles andere = automatisch (kein MDA)
+					fetch_info.bytes[0] = 2;
+				}
+				callback(node, fetch_info);
+			};
+			impl_->watched_nodes[&node] = oper_callback;
+			impl_->watched_pfields[static_cast<std::uint16_t>(std::stoi(pfield))].push_back(&node);
+		} else {
+			auto pfield_callback = [callback](ntype node, fitype fetch_info) {
+				// append size of double string
+				const std::uint32_t size = fetch_info.bytes.size();
+				std::uint8_t const *size_ptr = reinterpret_cast<std::uint8_t const *>(&size);
+				fetch_info.bytes.insert(fetch_info.bytes.begin(), size_ptr, size_ptr + 4);
+				callback(node, fetch_info);
+			};
+			impl_->watched_nodes[&node] = pfield_callback;
+			impl_->watched_pfields[static_cast<std::uint16_t>(std::stoi(pfield))].push_back(&node);
+		}
+	} else {
+		//if (browse_name == "cnc:ActMainProgramFile") return;
 		//if (browse_name == "cnc:ActMainProgramLine") return;
 
 		char exception_string[1024];
@@ -398,20 +477,22 @@ std::cout << "PFIELD[" << entry.first << "=" << entry.second << "]\n";
 				continue;
 			}
 
-			auto nit = impl_->watched_nodes.find(pit->second);
+			for (auto &elem: pit->second) {
+				auto nit = impl_->watched_nodes.find(elem);
 
-			if (nit == impl_->watched_nodes.end()) {
-				std::printf("Node <%s> was removed during CNC communication. Discard value.\n", pit->second->browse_path.str().c_str());
-				continue;
+				if (nit == impl_->watched_nodes.end()) {
+					std::printf("Node <%s> was removed during CNC communication. Discard value.\n", elem->browse_path.str().c_str());
+					continue;
+				}
+
+				const std::string double_string = std::to_string(entry.second);
+
+				::adapter::xml_node_fetch_info_type fetch_info;
+
+				fetch_info.fetched = true;
+				fetch_info.bytes.insert(fetch_info.bytes.end(), double_string.begin(), double_string.end());
+				nit->second(*(nit->first), fetch_info);
 			}
-
-			const std::string double_string = std::to_string(entry.second);
-
-			::adapter::xml_node_fetch_info_type fetch_info;
-
-			fetch_info.fetched = true;
-			fetch_info.bytes.insert(fetch_info.bytes.end(), double_string.begin(), double_string.end());
-			nit->second(*(nit->first), fetch_info);
 		}
 
 		lock.unlock();

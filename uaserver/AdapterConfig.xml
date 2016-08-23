@@ -135,14 +135,16 @@
 
 				<!-- active G functions [uint32 array] TODO: Nicht alle vorhanden? -->
 				<vdw:variable browse_name="ActGFunctions">
-					<value kind="fetcher" updated="interval" interval="100"></value>
+					<value kind="fetcher" updated="interval" interval="100">
+						<pfield>51015</pfield>
+					</value>
 				</vdw:variable>
 
-				<!-- actual jog increment [double] (Schrittweite) -->
+				<!-- actual jog increment [double] TODO: (Schrittweite im Kanal oder Vorgabe?) -->
 				<vdw:variable browse_name="ActJogIncrement">
 					<!-- range: 0-1000 m -->
 					<value kind="fetcher" updated="interval" interval="1000" range_start="0" range_end="1000000" unit="mm">
-						<pfield><!--589-->673</pfield>
+						<pfield><!-- 673 -->51013</pfield>
 					</value>
 				</vdw:variable>
 
@@ -186,9 +188,11 @@
 				</vdw:variable>
 ?>
 
-				<!-- active operation mode TODO: is this interpreter state? -->
+				<!-- active operation mode [enum] TODO: is this interpreter state? -->
 				<vdw:variable browse_name="ActOperationMode">
-					<value kind="fetcher" updated="interval" />
+					<value kind="fetcher" updated="interval">
+						<pfield>51014</pfield>
+					</value>
 				</vdw:variable>
 
 				<!-- active override value [double] -->
@@ -199,31 +203,86 @@
 					</value>
 				</vdw:variable>
 
-				<!-- active CNC program block [string[]] -->
-				<vdw:variable browse_name="ActMainProgramFile">
-					<value kind="fetcher" updated="interval" interval="5000"></value>
+<?ignore
+				<!-- active CNC program block [string[]] TODO: doesn not exist in EM -->
+				<vdw:variable browse_name="ActProgramBlock">
+					<value kind="fetcher" updated="interval" interval="5000">
+					</value>
 				</vdw:variable>
 
-				<!-- active CNC program offset [uint32] TODO: no offsets available -->
-				<vdw:variable browse_name="ActMainProgramFileOffset">
+				<!-- active CNC file path [string] TODO: doesn not exist in EM -->
+				<vdw:variable browse_name="ActProgramFile">
 					<value kind="fix">0</value>
 				</vdw:variable>
 
-				<!-- active CNC main program line [string] -->
-				<vdw:variable browse_name="ActMainProgramLine">
-					<value kind="fetcher" updated="interval" interval="5000">
-						<pfield>560</pfield>
-					</value>
-				</vdw:variable>
-
-				<!-- active CNC main program name [string] -->
-				<vdw:variable browse_name="ActMainProgramName">
-					<value kind="fetcher" updated="interval" interval="5000">
-						<pfield>560</pfield>
-					</value>
+				<!-- active CNC program offset [uint32] TODO: no offsets available -->
+				<vdw:variable browse_name="ActProgramFileOffset">
+					<value kind="fix">0</value>
 				</vdw:variable>
 ?>
 
+				<!-- active program line [string] TODO: only line number is used -->
+				<vdw:variable browse_name="ActProgramLine">
+					<value kind="fetcher" updated="interval" interval="5000">
+						<pfield>51016</pfield>
+					</value>
+				</vdw:variable>
+
+				<!-- active program name [string] TODO: only program number is used -->
+				<vdw:variable browse_name="ActProgramName">
+					<value kind="fetcher" updated="interval" interval="5000">
+						<pfield>51001</pfield>
+					</value>
+				</vdw:variable>
+
+				<!-- active program status [enum] -->
+				<vdw:variable browse_name="ActProgramStatus">
+					<value kind="fetcher" updated="interval" interval="5000">
+						<pfield>51012</pfield>
+					</value>
+				</vdw:variable>
+
+				<!-- active channel status [enum] TODO: Überlappung/Das Gleiche wie program status? -->
+				<vdw:variable browse_name="ActStatus">
+					<value kind="fetcher" updated="interval" interval="5000">
+						<pfield>51012</pfield>
+					</value>
+				</vdw:variable>
+
+<?ignore
+				<!-- block mode [bool] TODO: nicht vorhanden -->
+				<vdw:variable browse_name="BlockMode">
+					<value kind="fetcher" updated="interval" interval="5000" />
+				</vdw:variable>
+
+				<!-- commands not supported yet
+				<vdw:variable browse_name="CmdFeedrate"></vdw:variable>
+				<vdw:variable browse_name="CmdOverride"></vdw:variable>
+
+				<!-- test feedrate [double] TODO: not implemented -->
+				<vdw:variable browse_name="DryRunFeed">
+					<value kind="fetcher" updated="interval" interval="5000" />
+				</vdw:variable>
+
+				<!-- feed hold active [bool] TODO: not implemented -->
+				<vdw:variable browse_name="FeedHold">
+					<value kind="fetcher" updated="interval" interval="5000" />
+				</vdw:variable>
+?>
+
+				<!-- id [uint32] -->
+				<vdw:variable browse_name="Id">
+					<value kind="fix">0</value>
+				</vdw:variable>
+
+				<!-- ======================= POSITIONS ================= -->
+				<vdw:variable browse_name="PosTcpBcsA">
+				</vdw:variable>
+
+				<!-- ... Z -->
+				<vdw:variable browse_name="PosTcpWcsA">
+				</vdw:variable>
+				<!-- ======================= END ================= -->
 
 			</demo:object> <!-- end of channel -->
 

@@ -644,8 +644,14 @@ void NodeManagerDemo::set_variable_from_node(adapter::xml_node_type const &node,
 	} else if (rank == -1) {
 		switch (data_type.identifierNumeric()) {
 			case OpcUaCncId_CncOperationMode: {
-				std::uint8_t operation_mode = data_position[0];
-std::printf("operation mode: %d\n", operation_mode);
+				variant.setInt32(data_position[0]);
+				break;
+			}
+			case OpcUaCncId_CncChannelProgramStatus: {
+				variant.setInt32(data_position[0]);
+				break;
+			}
+			case OpcUaCncId_CncChannelStatus: {
 				variant.setInt32(data_position[0]);
 				break;
 			}
