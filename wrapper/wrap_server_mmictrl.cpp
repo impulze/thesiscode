@@ -42,11 +42,20 @@ bool try_and_fail(T const &func, std::shared_ptr<wrap::message> &response)
 	try {
 		func();
 		return true;
+	} catch (wrap::transfer_exception_error const &error) {
+		response->append(static_cast<std::uint8_t>(3));
+		response->append(error.what());
+		response->append(static_cast<std::uint8_t>(error.type));
+		response->append(error.win32_error);
 	} catch (wrap::error const &error) {
 		std::fprintf(stderr, "try_and_fail: %s\n", error.what());
 		response->append(static_cast<std::uint8_t>(1));
 		response->append(error.what());
 		response->append(error.win32_error);
+	} catch (wrap::transfer_exception const &exception) {
+		response->append(static_cast<std::uint8_t>(4));
+		response->append(exception.what());
+		response->append(static_cast<std::uint8_t>(exception.type));
 	} catch (std::exception const &exception) {
 		std::fprintf(stderr, "try_and_fail: %s\n", exception.what());
 		response->append(static_cast<std::uint8_t>(2));
@@ -191,19 +200,34 @@ void server_mmictrl::on_client_message(std::shared_ptr<client> const &client,
 		}
 
 		case message_type::CTRL_SEND_FILE_BLOCKED: {
-			response = message::from_type(message_type::CTRL_GET_INIT_RESPONSE);
+			response = message::from_type(message_type::CTRL_SEND_FILE_BLOCKED_RESPONSE);
 			const std::string name = message->extract_string(0);
 			const std::string header = message->extract_string(static_cast<std::uint16_t>(2 + name.size()));
 			const transfer_block_type type = static_cast<transfer_block_type>(message->extract_bit8(static_cast<std::uint16_t>(2 + name.size() + 2 + header.size())));
-			auto const func = [&lclient, &name, &header, &type]() {
-				lclient->ctrl->get_init_state();
+			auto const func = [&lclient, &name, &header, type]() {
+				lclient->ctrl->send_file_blocked(name, header, type);
 			};
 			const bool result = try_and_fail(func, response);
 
 			if (result) {
 				response->append(static_cast<std::uint8_t>(0));
 			}
-			response->append(static_cast<std::uint8_t>(0));
+
+			break;
+		}
+
+		case message_type::CTRL_RECEIVE_FILE_BLOCKED: {
+			response = message::from_type(message_type::CTRL_RECEIVE_FILE_BLOCKED_RESPONSE);
+			const std::string name = message->extract_string(0);
+			const transfer_block_type type = static_cast<transfer_block_type>(message->extract_bit8(static_cast<std::uint16_t>(2 + name.size())));
+			auto const func = [&lclient, &name, type]() {
+				lclient->ctrl->receive_file_blocked(name, type);
+			};
+			const bool result = try_and_fail(func, response);
+
+			if (result) {
+				response->append(static_cast<std::uint8_t>(0));
+			}
 
 			break;
 		}

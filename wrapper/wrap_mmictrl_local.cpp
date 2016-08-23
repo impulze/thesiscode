@@ -165,6 +165,11 @@ wrap::transfer_message eckelmann_to_cpp_message(ULONG parameter)
 			return msg;
 		}
 
+		case CB(SB0_DATENANFORDERUNG_KUC, SB1_NC_PROG_KUC): {
+			printf("data: %d\n", em_message->len_us);
+			return msg;
+		}
+
 		case CB(SB0_EXCEPTION_KUC, SB1_FEHLERNUMMER_KUC): {
 			msg.data.resize(164);
 
@@ -523,6 +528,7 @@ void mmictrl_local::send_file_blocked(std::string const &name, std::string const
 	}
 
 	const LONG cnv_type = to_block_type_conversion(type);
+printf("%d\n", cnv_type);
 	const LONG result = ncrSendFileBlocked_p(impl_->handle, name.c_str(), header.c_str(), cnv_type);
 
 	throw_transfer_exception(conversion_to_transfer_status_type(result));
@@ -535,7 +541,7 @@ void mmictrl_local::receive_file_blocked(std::string const &name, transfer_block
 	}
 
 	const LONG cnv_type = to_block_type_conversion(type);
-	const LONG result = ncrReceiveFileBlocked_p(impl_->handle, header.c_str(), cnv_type);
+	const LONG result = ncrReceiveFileBlocked_p(impl_->handle, name.c_str(), cnv_type);
 
 	throw_transfer_exception(conversion_to_transfer_status_type(result));
 }

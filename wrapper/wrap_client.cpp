@@ -41,7 +41,8 @@ struct client::impl
 	wrap::client *client;
 	std::mutex mutex;
 	std::condition_variable wakeup_condition;
-	bool woken_up = false;
+	bool woken_up;
+
 #ifndef WIN32
 	int fake_fd[2];
 #endif
@@ -148,6 +149,7 @@ void client::connect(std::string const &address, std::uint16_t port)
 
 	impl_.reset(new impl(address, port));
 	impl_->client = this;
+	impl_->woken_up = false;
 
 #ifndef WIN32
 	const int result = pipe(impl_->fake_fd);
@@ -158,7 +160,7 @@ void client::connect(std::string const &address, std::uint16_t port)
 	}
 
 #else
-#error "Unimplemented"
+//#error "Unimplemented"
 #endif
 }
 
@@ -172,7 +174,7 @@ void client::interrupt()
 	impl_->wakeup_condition.wait(lock, [this](){ return impl_->woken_up; });
 	impl_->woken_up = false;
 #else
-#error "Unimplemented"
+//#error "Unimplemented"
 #endif
 }
 
@@ -208,19 +210,25 @@ std::shared_ptr<message> client::recv_message()
 
 	std::shared_ptr<message> response;
 
+#ifndef WIN32
 	pollfd_type pollfd[2];
+#else
+	pollfd_type pollfd[1];
+#endif
 	pollfd[0].fd = impl_->socket;
 	pollfd[0].events = POLLIN;
 	pollfd[0].revents = 0;
+#ifndef WIN32
 	pollfd[1].fd = impl_->fake_fd[0];
 	pollfd[1].events = POLLIN;
 	pollfd[1].revents = 0;
+#endif
 
 	while (true) {
 #ifndef WIN32
 		const int result = poll(&pollfd[0], 2, 20000);
 #else
-		const int result = WSAPoll(&pollfd[0], 2, 20000);
+		const int result = WSAPoll(&pollfd[0], 1, 20000);
 #endif
 
 #ifndef WIN32
@@ -246,13 +254,15 @@ printf("		poll returned: %d\n", result);
 			if (response) {
 				return response;
 			}
+#ifndef WIN32
 		} else if (pollfd[1].revents & POLLIN) {
 			std::unique_lock<std::mutex> lock(impl_->mutex);
 			char buf;
-			ssize_t res = read(pollfd[1].fd, &buf, 1);
+			read(pollfd[1].fd, &buf, 1);
 			impl_->woken_up = true;
 			impl_->wakeup_condition.notify_one();
 			return response;
+#endif
 		} else {
 			throw std::runtime_error("Unexpected polling state for client descriptors.");
 		}
