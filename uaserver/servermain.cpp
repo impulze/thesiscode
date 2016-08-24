@@ -570,7 +570,11 @@ int OpcServerMain(const char* szAppPath)
 #endif
 
         // Start server object
+	try {
         ret = pServer->start();
+	} catch (std::exception const &error) {
+		std::fprintf(stderr, "err: %s\n", error.what());
+	}
         if ( ret != 0 )
         {
             delete pServer;
