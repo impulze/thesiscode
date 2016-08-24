@@ -409,6 +409,7 @@ void mmictrl_local::impl::internal_callback(ULONG type, ULONG parameter, mmictrl
 			std::printf("CNC ERROR: [task: %d, class: %d, num: %hd] [%s]\n", task,  cls, num, error_msg);
 
 			if (func) {
+				msg_append();
 				call();
 			}
 
