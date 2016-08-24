@@ -42,14 +42,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LinkIncremental>true</LinkIncremental>
     <IncludePath>$(VCInstallDir)include;$(VCInstallDir)atlmfc\include;$(WindowsSDK_IncludePath);$(UASDKDIR)/include/uabase;$(UASDKDIR)/include/uastack;$(UASDKDIR)/include/uamodels;$(UASDKDIR)/include/xmlparser;$(UASDKDIR)/include/uapki;$(UASDKDIR)/include/uaserver;$(Adapter_DIR)/include;./../../uaserver/utilities;$(Models_DIR);$(SolutionDir)\$(ProjectName)\tmp;$(Wrapper_DIR)\include</IncludePath>
     <LibraryPath>$(VCInstallDir)lib;$(VCInstallDir)atlmfc\lib;$(WindowsSDK_LibraryPath_x86);$(UASDK_DEBUG_LIBDIR)</LibraryPath>
     <ReferencePath>$(VCInstallDir)atlmfc\lib;$(VCInstallDir)lib;</ReferencePath>
     <ExecutablePath>$(VCInstallPath_CTP_NOV2012_Bin);$(ExecutablePath);</ExecutablePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>false</LinkIncremental>
     <IncludePath>$(VCInstallDir)include;$(VCInstallDir)atlmfc\include;$(WindowsSDK_IncludePath);$(UASDKDIR)/include/uabase;$(UASDKDIR)/include/uastack;$(UASDKDIR)/include/uamodels;$(UASDKDIR)/include/xmlparser;$(UASDKDIR)/include/uapki;$(UASDKDIR)/include/uaserver;$(Adapter_DIR)/include;./../../uaserver/utilities;$(Models_DIR);$(SolutionDir)\$(ProjectName)\tmp;$(Wrapper_DIR)\include</IncludePath>
     <LibraryPath>$(VCInstallDir)lib;$(VCInstallDir)atlmfc\lib;$(WindowsSDK_LibraryPath_x86);$(UASDK_LIBDIR)</LibraryPath>
     <ReferencePath>$(VCInstallDir)atlmfc\lib;$(VCInstallDir)lib;</ReferencePath>
@@ -61,7 +59,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/FI tmp.h %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
@@ -93,7 +91,7 @@ echo #define SERVER_ALTERNATE_CONFIG_PATH "%__TEMP__%"  &gt;&gt; tmp/tmp.h</Comm
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;ALTERNATE_SERVER_CONFIG_PATH=$(NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/FI tmp.h %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
